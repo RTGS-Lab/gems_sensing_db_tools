@@ -1,4 +1,6 @@
-
+#evaluate formatted data based on anns parameters
+#inputs: dictionary of formatted data
+#outputs: nofication ready data
 
 def analyze_battery_data(data):
     if not data:

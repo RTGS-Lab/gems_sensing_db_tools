@@ -1,3 +1,10 @@
+#gets data from a database
+#inputs: timeframe, database, project, credentials, node_ids
+#outputs: csv file
+# utilizes functions from get_sensing_data
+
+
+
 from dotenv import load_dotenv
 import os
 import psycopg2
