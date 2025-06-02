@@ -3,7 +3,8 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import pprint
-from gems_sensing_db_tools.error_code_parser import parse_json_file
+from error_code_parser import parse_json_file
+from error_code_parser import load_error_database
 
 load_dotenv()  # Load environment variables from .env
 
@@ -78,4 +79,74 @@ def fetch_latest_battery(node_id):
 #     print("No recent diagnostic entry with Kestrel found.")
 
 
-parse_json_file("error_codes.json")
+
+
+# sentinel/main.py
+# Load error database (fetches from github if not found locally)
+error_db = load_error_database(None) # 
+if not error_db:
+  print("Failed to load error database. Cannot continue.")
+generate_graph = False
+node_filter = []
+# Parse the JSON file and generate the graph if needed
+
+'''
+This function will parse the JSON file containing error codes and generate a graph if specified.
+Parameters:
+- json_file: The path to the JSON file containing error codes.
+- error_db: The error database to load the error codes into.
+- node_filter: A list of nodes to filter the error codes by.
+Returns:
+- Dictionary containing the parsed nodes and the frequency of their errors.
+{
+    "all": Counter({
+        "0x80070000": 3,
+        "0x500400f6": 2,
+        "0xf00500f9": 1
+    }),
+    "nqepuig3898tva7fg": Counter({
+        "0x80070000": 2,
+        "0x500400f6": 1
+    }),
+    "qiubgv9q984g3qreg": Counter({
+        "0x80070000": 1,
+        "0x500400f6": 1,
+        "0xf00500f9": 1
+    })
+}
+
+Keys are strings: "all" and possibly node IDs (like "12345", "nodeA", etc.).
+Values are collections.Counter objects, which are like dictionaries that count occurrences of things.
+'''
+error_counters = parse_json_file("error_codes.json", error_db, node_filter)
+
+for node, errors in error_counters.items():
+    print(f"Node: {node}")
+    for error, count in errors.items():
+        print(f"  Error: {error}, Count: {count}")
+    print("\n")
+
+
+def visualize_error_counts(error_counters):
+    """
+    Visualize the output of parse_json_file() as bar charts.
+    Each key in error_counters is a node (or 'all'), and its value is a Counter of error codes.
+    """
+    import matplotlib.pyplot as plt
+
+    for node_id, counter in error_counters.items():
+        if not counter:
+            continue
+        codes, counts = zip(*counter.most_common())
+        plt.figure(figsize=(12, 6))
+        plt.bar(codes, counts, color='skyblue')
+        plt.title(f"Error Code Frequency for Node '{node_id}'")
+        plt.xlabel("Error Code")
+        plt.ylabel("Count")
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        plt.show()
+
+# Example usage:
+# error_counters = parse_json_file('your_file.json', error_db)
+# visualize_error_counts(error_counters)
