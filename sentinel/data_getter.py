@@ -127,6 +127,7 @@ for node, errors in error_counters.items():
     print("\n")
 
 
+
 def visualize_error_counts(error_counters):
     """
     Visualize the output of parse_json_file() as bar charts.
