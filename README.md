@@ -59,16 +59,13 @@ RTGS Lab Tools consolidates multiple environmental data analysis workflows into 
 - PostgreSQL client libraries (for GEMS database access)
 - UMN VPN connection (for database access)
 
-### Basic Installation
-```bash
-pip install rtgs-lab-tools
-```
-
-### Development Installation
+### Installation
 ```bash
 git clone https://github.com/RTGS-Lab/rtgs-lab-tools.git
 cd rtgs-lab-tools
-pip install -e .[dev]
+python -m venv venv
+source venv/bin/activate
+pip install -e .
 ```
 
 ### Optional Dependencies
