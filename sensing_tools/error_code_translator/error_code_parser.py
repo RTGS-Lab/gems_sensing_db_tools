@@ -19,6 +19,16 @@ from collections import Counter
 import matplotlib.pyplot as plt
 from datetime import datetime
 
+# Add the parent directory to path for GitLogger import
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+
+try:
+    from rtgs_lab_tools.core import GitLogger
+    GIT_LOGGING_AVAILABLE = True
+except ImportError:
+    print("Warning: GitLogger not available. Git logging will be disabled.")
+    GIT_LOGGING_AVAILABLE = False
+
 # Define main error code classes
 ERROR_CLASSES = {
     "0": "Unknown",
@@ -612,15 +622,27 @@ def generate_error_graph(error_counter: Counter, error_db: Dict[str, Dict[str, s
 def main():
     """Main entry point"""
     if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <input_file.csv|json> [error_codes.md] [--graph] [--nodes=node1,node2,...]")
+        print(f"Usage: {sys.argv[0]} <input_file.csv|json> [error_codes.md] [--graph] [--nodes=node1,node2,...] [--no-git-log] [--note=description]")
         print("  --graph: Optional flag to generate error frequency graph")
         print("  --nodes: Optional comma-separated list of node IDs to filter by")
+        print("  --no-git-log: Disable automatic git logging")
+        print("  --note: Description for this error analysis")
         return 1
     
     input_file = sys.argv[1]
     
     # Check for --graph flag anywhere in arguments
     generate_graph = "--graph" in sys.argv
+    
+    # Check for --no-git-log flag
+    no_git_log = "--no-git-log" in sys.argv
+    
+    # Check for --note flag
+    note = None
+    for arg in sys.argv:
+        if arg.startswith("--note="):
+            note = arg.split("=", 1)[1]
+            break
     
     # Check for --nodes flag
     node_filter = []
@@ -637,15 +659,121 @@ def main():
             md_file = arg
             break
     
-    # Load error database
-    error_db = load_error_database(md_file)
-    if not error_db:
-        print("Failed to load error database. Cannot continue.")
-        return 1
+    # Initialize GitLogger
+    git_logger = None
+    if not no_git_log and GIT_LOGGING_AVAILABLE:
+        try:
+            git_logger = GitLogger(tool_name="error-analysis")
+        except Exception as e:
+            print(f"Warning: Failed to initialize git logging: {e}")
     
-    # Parse and display errors
-    parse_error_file(input_file, error_db, generate_graph, node_filter)
-    return 0
+    start_time = datetime.now()
+    
+    try:
+        # Load error database
+        error_db = load_error_database(md_file)
+        if not error_db:
+            print("Failed to load error database. Cannot continue.")
+            _log_error_to_git(git_logger, "Database load failed", "Failed to load error database", start_time, locals())
+            return 1
+        
+        # Parse and display errors
+        result = parse_error_file_with_logging(input_file, error_db, generate_graph, node_filter, git_logger, start_time, note)
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error during processing: {e}")
+        _log_error_to_git(git_logger, "Processing error", str(e), start_time, locals())
+        return 1
+
+
+def parse_error_file_with_logging(file_path: str, error_db: Dict[str, Dict[str, str]], 
+                                generate_graph: bool = False, node_filter: List[str] = None,
+                                git_logger=None, start_time=None, note=None) -> int:
+    """Parse error file with git logging wrapper"""
+    try:
+        # Call the original parse_error_file function
+        parse_error_file(file_path, error_db, generate_graph, node_filter)
+        
+        # Create git log if enabled
+        if git_logger:
+            try:
+                operation = f"Analyze error codes from {os.path.basename(file_path)}"
+                if note:
+                    operation += f" - {note}"
+                
+                parameters = {
+                    'input_file': file_path,
+                    'generate_graph': generate_graph,
+                    'node_filter': node_filter,
+                    'error_database_file': file_path if os.path.exists(file_path) else 'embedded',
+                    'note': note
+                }
+                
+                results = {
+                    'success': True,
+                    'input_file': file_path,
+                    'graphs_generated': generate_graph,
+                    'node_filtering': bool(node_filter),
+                    'start_time': start_time.isoformat(),
+                    'end_time': datetime.now().isoformat()
+                }
+                
+                additional_sections = {
+                    "Analysis Summary": f"- **Input File**: {file_path}\n- **Graph Generation**: {'Yes' if generate_graph else 'No'}\n- **Node Filtering**: {len(node_filter) if node_filter else 'None'} nodes"
+                }
+                
+                git_logger.log_execution(
+                    operation=operation,
+                    parameters=parameters,
+                    results=results,
+                    script_path=__file__,
+                    additional_sections=additional_sections
+                )
+            except Exception as e:
+                print(f"Warning: Failed to create git log: {e}")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"Error parsing file: {e}")
+        _log_error_to_git(git_logger, "File parsing error", str(e), start_time, locals())
+        return 1
+
+
+def _log_error_to_git(git_logger, error_type: str, error: str, start_time: datetime, local_vars: dict):
+    """Helper function to log errors to git."""
+    if not git_logger:
+        return
+    
+    try:
+        operation = f"Error analysis failed - {error_type}"
+        
+        # Extract parameters safely
+        parameters = {}
+        safe_vars = ['input_file', 'generate_graph', 'node_filter', 'md_file', 'note']
+        for var in safe_vars:
+            if var in local_vars:
+                parameters[var] = local_vars[var]
+        
+        results = {
+            'success': False,
+            'error': str(error),
+            'error_type': error_type,
+            'start_time': start_time.isoformat(),
+            'end_time': datetime.now().isoformat()
+        }
+        
+        git_logger.log_execution(
+            operation=operation,
+            parameters=parameters,
+            results=results,
+            script_path=__file__
+        )
+    except Exception:
+        # Don't let git logging errors crash the application
+        pass
 
 
 if __name__ == "__main__":
