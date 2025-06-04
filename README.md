@@ -11,41 +11,46 @@ RTGS Lab Tools consolidates multiple environmental data analysis workflows into 
 
 ## Features
 
-### 📊 Sensing Data Tools
+### Sensing Data Tools
 - **Data Extraction**: Query and export raw sensor data from the GEMS database
 - **Project Management**: List available projects and node configurations
 - **Multiple Formats**: Export data as CSV or Parquet with compression options
 - **Data Integrity**: SHA-256 hashing and metadata generation for archival
 
-### 🌍 Climate Data Access
+### Gridded Data Tools
 - **ERA5 Reanalysis**: Download and process ERA5 climate data via Copernicus CDS
 - **Variable Support**: Access temperature, precipitation, wind, radiation, and more
 - **Spatial/Temporal Filtering**: Custom bounding boxes and time ranges
 - **Data Processing**: Regridding, aggregation, and statistical analysis
 
-### 📈 Visualization Tools
+### Visualization Tools
 - **Time Series Plots**: Automated plotting of sensor parameters over time
 - **Multi-Parameter Comparison**: Compare data across nodes and variables
 - **Multiple Formats**: Export plots as PNG, PDF, or SVG
 - **Interactive Parameter Discovery**: Automatically detect available parameters in data
 
-### 🔧 Device Management
-- **Particle IoT Integration**: Manage sensor configurations via Particle Cloud API
-- **Batch Operations**: Update multiple devices concurrently with verification
+### Device Configuration
+- **Batch Operations**: Update multiple device configurations concurrently with verification
 - **Configuration Templates**: Pre-defined settings for different sensor types
 - **Audit Trails**: Comprehensive logging of all device operations
 
-### 🔍 Error Analysis
+### Device Monitoring
 - **Error Code Parsing**: Decode and analyze hex error codes from GEMS devices
 - **Pattern Recognition**: Identify common errors and temporal trends
 - **Visualization**: Generate frequency plots and statistical summaries
 - **Device Diagnostics**: Track errors by node and hardware component
 
-### 🤖 Natural Language Interface
+### Packet Parser
+- **Universal**: Packet parser for parsing new and historical JSON packets from in field devices
+
+### Natural Language Interface
 - **MCP Server**: FastMCP-based server for natural language interaction
 - **Claude Integration**: Use conversational AI to operate all tools
 - **Automated Logging**: Every operation creates detailed audit logs
 - **Git Integration**: Automatic commit and tracking of all tool executions
+
+### Universal Logging
+- **Automatic Logging**: Automatically creates logs and uploads them to github for auditing purposes and tool use analysis
 
 ## Installation
 
@@ -61,8 +66,8 @@ pip install rtgs-lab-tools
 
 ### Development Installation
 ```bash
-git clone https://github.com/RTGS-Lab/gems_sensing_db_tools.git
-cd gems_sensing_db_tools
+git clone https://github.com/RTGS-Lab/rtgs-lab-tools.git
+cd rtgs-lab-tools
 pip install -e .[dev]
 ```
 
@@ -174,14 +179,23 @@ The package includes a FastMCP server that enables natural language interaction 
 
 2. Add to Claude Desktop configuration:
    ```json
-   {
-     "mcpServers": {
-       "rtgs_lab_tools": {
-         "command": "python",
-         "args": ["-m", "rtgs_lab_tools.mcp_server.rtgs_lab_tools_mcp_server"]
-       }
-     }
+  {
+  "mcpServers": {
+    "particle": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/home/zach/Code/gems_sensing_db_tools/src/rtgs_lab_tools/mcp_server/particle-mcp-server/",
+        "run",
+        "particle.py"
+      ]
+    },
+    "rtgs_lab_tools": {
+      "command": "/home/zach/Code/gems_sensing_db_tools/venv/bin/python",
+      "args": ["-m", "rtgs_lab_tools.mcp_server.rtgs_lab_tools_mcp_server"]
+    }
    }
+  }
    ```
 
 3. Use natural language to operate tools:

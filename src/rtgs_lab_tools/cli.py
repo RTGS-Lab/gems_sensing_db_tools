@@ -524,8 +524,8 @@ def analyze_errors(ctx, file, error_column, generate_graph, nodes, output_dir,
     
     try:
         # Import diagnostics modules
-        from .diagnostics import ErrorCodeParser, parse_error_codes, analyze_error_patterns
-        from .diagnostics.cli import load_data_file, filter_by_nodes, create_error_frequency_plot, setup_output_directory
+        from .device_monitoring import ErrorCodeParser, parse_error_codes, analyze_error_patterns
+        from .device_monitoring.cli import load_data_file, filter_by_nodes, create_error_frequency_plot, setup_output_directory
         
         # Load data
         logger.info(f"Loading data from {file}")
