@@ -1,4 +1,4 @@
-"""FastMCP server for RTGS Lab Tools - Updated to use modular CLI structure."""
+"""FastMCP server for RTGS Lab Tools - Fixed environment variable handling."""
 
 import asyncio
 import json
@@ -15,8 +15,25 @@ mcp = FastMCP("rtgs-lab-tools")
 # Get the absolute path to the Python executable
 PYTHON_EXECUTABLE = sys.executable
 
-# Get the root directory of the project
+# Get the root directory of the project - this should be where your .env file is
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+print(f"Project root: {PROJECT_ROOT}")
+
+# Load environment variables from .env file if it exists
+def load_env_file():
+    """Load environment variables from .env file."""
+    env_file = PROJECT_ROOT / ".env"
+    if env_file.exists():
+        from dotenv import load_dotenv
+        load_dotenv(env_file)
+        print(f"Loaded .env file from: {env_file}")
+        return True
+    else:
+        print(f"No .env file found at: {env_file}")
+        return False
+
+# Load environment on startup
+env_loaded = load_env_file()
 
 # -----------------
 # DATA EXTRACTION TOOLS
@@ -47,17 +64,18 @@ async def extract_sensing_data(
         note: Description for this data extraction (optional)
     """
     try:
-        # change dir to the project root
+        # Ensure we're in the correct directory
+        original_cwd = os.getcwd()
         os.chdir(PROJECT_ROOT)
-
+        
         # Set MCP environment variables for proper git logging
         env = os.environ.copy()
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        # Build command to call the main CLI router
+        # Build command to call the main CLI
         cmd = [
-            PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.sensing_data.cli", "extract",
+            PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "data",
             "--project", project,
             "--output", output_format
         ]
@@ -81,7 +99,10 @@ async def extract_sensing_data(
             cmd.extend(["--note", note])
         
         # Run with MCP environment for proper git logging
-        stdout, stderr = await run_command_with_env(cmd, env)
+        stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
+        
+        # Restore original working directory
+        os.chdir(original_cwd)
         
         return {
             "success": True,
@@ -89,15 +110,22 @@ async def extract_sensing_data(
             "stderr": stderr if stderr else None,
             "command": " ".join(cmd),
             "mcp_execution": True,
-            "git_logging_enabled": True
+            "git_logging_enabled": True,
+            "working_directory": str(PROJECT_ROOT)
         }
         
     except Exception as e:
+        # Restore original working directory
+        if 'original_cwd' in locals():
+            os.chdir(original_cwd)
+            
         return {
             "success": False,
             "error": f"Data extraction failed: {str(e)}",
             "command": " ".join(cmd) if 'cmd' in locals() else "N/A",
-            "mcp_execution": True
+            "mcp_execution": True,
+            "env_loaded": env_loaded,
+            "project_root": str(PROJECT_ROOT)
         }
 
 
@@ -105,14 +133,21 @@ async def extract_sensing_data(
 async def list_available_projects() -> Dict[str, Any]:
     """List all available projects in the GEMS Sensing database."""
     try:
+        # Ensure we're in the correct directory
+        original_cwd = os.getcwd()
+        os.chdir(PROJECT_ROOT)
+        
         # Set MCP environment variables
         env = os.environ.copy()
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.sensing_data.cli", "list-projects"]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "data", "--list-projects"]
         
-        stdout, stderr = await run_command_with_env(cmd, env)
+        stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
+        
+        # Restore original working directory
+        os.chdir(original_cwd)
         
         return {
             "success": True,
@@ -121,9 +156,13 @@ async def list_available_projects() -> Dict[str, Any]:
         }
         
     except Exception as e:
+        if 'original_cwd' in locals():
+            os.chdir(original_cwd)
+            
         return {
             "success": False,
-            "error": f"Failed to list projects: {str(e)}"
+            "error": f"Failed to list projects: {str(e)}",
+            "env_loaded": env_loaded
         }
 
 
@@ -156,12 +195,16 @@ async def create_visualization(
         note: Description for this visualization (optional)
     """
     try:
+        # Ensure we're in the correct directory
+        original_cwd = os.getcwd()
+        os.chdir(PROJECT_ROOT)
+        
         # Set MCP environment variables
         env = os.environ.copy()
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        cmd = [PYTHON_EXECUTABLE, str(RTGS_CLI_PATH), "visualize", "--file", file_path, "--format", format]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "visualize", "--file", file_path, "--format", format]
         
         if parameter:
             cmd.extend(["--parameter", parameter])
@@ -182,7 +225,10 @@ async def create_visualization(
         if note:
             cmd.extend(["--note", note])
         
-        stdout, stderr = await run_command_with_env(cmd, env)
+        stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
+        
+        # Restore original working directory
+        os.chdir(original_cwd)
         
         return {
             "success": True,
@@ -193,6 +239,9 @@ async def create_visualization(
         }
         
     except Exception as e:
+        if 'original_cwd' in locals():
+            os.chdir(original_cwd)
+            
         return {
             "success": False,
             "error": f"Visualization failed: {str(e)}",
@@ -204,13 +253,18 @@ async def create_visualization(
 async def list_available_parameters(file_path: str) -> Dict[str, Any]:
     """List available parameters in a sensor data file."""
     try:
+        original_cwd = os.getcwd()
+        os.chdir(PROJECT_ROOT)
+        
         env = os.environ.copy()
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        cmd = [PYTHON_EXECUTABLE, str(RTGS_CLI_PATH), "visualize", "--file", file_path, "--list-params"]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "visualize", "--file", file_path, "--list-params"]
         
-        stdout, stderr = await run_command_with_env(cmd, env)
+        stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
+        
+        os.chdir(original_cwd)
         
         return {
             "success": True,
@@ -219,248 +273,13 @@ async def list_available_parameters(file_path: str) -> Dict[str, Any]:
         }
         
     except Exception as e:
+        if 'original_cwd' in locals():
+            os.chdir(original_cwd)
+            
         return {
             "success": False,
             "error": f"Failed to list parameters: {str(e)}"
         }
-
-
-# -----------------
-# ERA5 CLIMATE DATA TOOLS
-# -----------------
-
-@mcp.tool("download_era5_data")
-async def download_era5_data(
-    variables: List[str],
-    start_date: str,
-    end_date: str,
-    area: Optional[str] = None,
-    output_file: Optional[str] = None,
-    pressure_levels: Optional[str] = None,
-    time_hours: Optional[str] = None,
-    process: bool = False,
-    note: Optional[str] = None
-) -> Dict[str, Any]:
-    """
-    Download ERA5 climate reanalysis data with automatic git logging.
-    
-    Args:
-        variables: List of ERA5 variables to download
-        start_date: Start date in YYYY-MM-DD format
-        end_date: End date in YYYY-MM-DD format
-        area: Bounding box as "north,west,south,east" (optional)
-        output_file: Output NetCDF file path (optional)
-        pressure_levels: Pressure levels as comma-separated values (optional)
-        time_hours: Specific hours as comma-separated values (optional)
-        process: Process downloaded data for basic statistics (default: False)
-        note: Description for this download (optional)
-    """
-    try:
-        # Set MCP environment variables
-        env = os.environ.copy()
-        env['MCP_SESSION'] = 'true'
-        env['MCP_USER'] = 'claude'
-        
-        cmd = [PYTHON_EXECUTABLE, str(RTGS_CLI_PATH), "era5", "--start-date", start_date, "--end-date", end_date]
-        
-        # Add variables
-        for var in variables:
-            cmd.extend(["--variables", var])
-        
-        if area:
-            cmd.extend(["--area", area])
-        
-        if output_file:
-            cmd.extend(["--output-file", output_file])
-        
-        if pressure_levels:
-            cmd.extend(["--pressure-levels", pressure_levels])
-        
-        if time_hours:
-            cmd.extend(["--time-hours", time_hours])
-        
-        if process:
-            cmd.append("--process")
-        
-        if note:
-            cmd.extend(["--note", note])
-        
-        stdout, stderr = await run_command_with_env(cmd, env)
-        
-        return {
-            "success": True,
-            "output": stdout,
-            "command": " ".join(cmd),
-            "mcp_execution": True,
-            "git_logging_enabled": True
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"ERA5 download failed: {str(e)}",
-            "command": " ".join(cmd) if 'cmd' in locals() else "N/A"
-        }
-
-
-@mcp.tool("list_era5_variables")
-async def list_era5_variables() -> Dict[str, Any]:
-    """List available ERA5 variables."""
-    try:
-        env = os.environ.copy()
-        env['MCP_SESSION'] = 'true'
-        env['MCP_USER'] = 'claude'
-        
-        cmd = [PYTHON_EXECUTABLE, str(RTGS_CLI_PATH), "era5", "--list-variables", "--variables", "placeholder"]
-        
-        stdout, stderr = await run_command_with_env(cmd, env)
-        
-        return {
-            "success": True,
-            "output": stdout,
-            "command": " ".join(cmd)
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"Failed to list ERA5 variables: {str(e)}"
-        }
-
-
-# -----------------
-# DEVICE MANAGEMENT TOOLS
-# -----------------
-
-@mcp.tool("update_particle_device_configurations")
-async def update_particle_device_configurations(
-    config: str,
-    devices: str,
-    max_retries: int = 3,
-    restart_wait: int = 30,
-    online_timeout: int = 120,
-    max_concurrent: int = 5,
-    dry_run: bool = False,
-    output_file: str = "update_results.json",
-    note: Optional[str] = None
-) -> Dict[str, Any]:
-    """
-    Update sensor and system configuration on multiple Particle devices with automatic git logging.
-    This tool calls the new modular CLI to maintain full functionality.
-    
-    Args:
-        config: Configuration as JSON string OR path to configuration file
-        devices: Device IDs as comma-separated string OR path to device list file
-        max_retries: Maximum retry attempts per device (default: 3)
-        restart_wait: Seconds to wait for device restart (default: 30)
-        online_timeout: Seconds to wait for device to come online (default: 120)
-        max_concurrent: Maximum concurrent devices to process (default: 5)
-        dry_run: Validate inputs without making changes (default: False)
-        output_file: Output file for detailed results (default: update_results.json)
-        note: Description for this configuration update (optional)
-    """
-    try:
-        # Set MCP environment variables for proper git logging
-        env = os.environ.copy()
-        env['MCP_SESSION'] = 'true'
-        env['MCP_USER'] = 'claude'
-        
-        # Use the main CLI router for device configuration
-        cmd = [
-            PYTHON_EXECUTABLE, str(RTGS_CLI_PATH), "device-config",
-            "--config", config,
-            "--devices", devices,
-            "--output-file", output_file,
-            "--max-retries", str(max_retries),
-            "--restart-wait", str(restart_wait),
-            "--online-timeout", str(online_timeout),
-            "--max-concurrent", str(max_concurrent)
-        ]
-        
-        if dry_run:
-            cmd.append("--dry-run")
-        
-        if note:
-            cmd.extend(["--note", note])
-        
-        # Run with MCP environment for proper logging
-        stdout, stderr = await run_command_with_env(cmd, env)
-        
-        # Try to load and parse the results file if it exists
-        results_data = None
-        if os.path.exists(output_file):
-            try:
-                with open(output_file, 'r') as f:
-                    results_data = json.load(f)
-            except Exception:
-                pass  # Continue without results data if parsing fails
-        
-        result = {
-            "success": True,
-            "output": stdout,
-            "stderr": stderr if stderr else None,
-            "command": " ".join(cmd),
-            "results_file": output_file,
-            "mcp_execution": True,
-            "git_logging_enabled": True,
-            "dry_run": dry_run
-        }
-        
-        # Add parsed results if available
-        if results_data:
-            result["summary"] = results_data.get("summary", {})
-            result["device_count"] = results_data["summary"].get("total_devices", 0)
-            result["successful_count"] = results_data["summary"].get("successful", 0)
-            result["failed_count"] = results_data["summary"].get("failed", 0)
-            
-            if not dry_run and result["device_count"] > 0:
-                success_rate = (result["successful_count"] / result["device_count"] * 100)
-                result["success_rate"] = f"{success_rate:.1f}%"
-        
-        return result
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"Configuration update failed: {str(e)}",
-            "command": " ".join(cmd) if 'cmd' in locals() else "N/A",
-            "mcp_execution": True
-        }
-
-
-@mcp.tool("create_device_config_template")
-async def create_device_config_template() -> Dict[str, Any]:
-    """Create a template configuration for Particle devices."""
-    template_config = {
-        "config": {
-            "system": {
-                "logPeriod": 300,
-                "backhaulCount": 4,
-                "powerSaveMode": 1,
-                "loggingMode": 0,
-                "numAuxTalons": 1,
-                "numI2CTalons": 1,
-                "numSDI12Talons": 1
-            },
-            "sensors": {
-                "numET": 0,
-                "numHaar": 0,
-                "numSoil": 3,
-                "numApogeeSolar": 0,
-                "numCO2": 0,
-                "numO2": 0,
-                "numPressure": 0
-            }
-        }
-    }
-    
-    return {
-        "success": True,
-        "config_template": template_config,
-        "config_string": json.dumps(template_config),
-        "description": "Template configuration for Particle devices. Modify values as needed before applying.",
-        "usage": "Pass the config_string as the 'config' parameter to update_particle_device_configurations"
-    }
 
 
 # -----------------
@@ -488,13 +307,15 @@ async def analyze_error_codes(
         note: Description for this error analysis (optional)
     """
     try:
+        original_cwd = os.getcwd()
+        os.chdir(PROJECT_ROOT)
+        
         # Set MCP environment variables
         env = os.environ.copy()
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        # Call the main CLI router for error analysis
-        cmd = [PYTHON_EXECUTABLE, str(RTGS_CLI_PATH), "analyze-errors", "--file", file_path, "--error-column", error_column]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "analyze-errors", "--file", file_path, "--error-column", error_column]
         
         if generate_graph:
             cmd.append("--generate-graph")
@@ -508,18 +329,11 @@ async def analyze_error_codes(
         if note:
             cmd.extend(["--note", note])
         
-        stdout, stderr = await run_command_with_env(cmd, env)
+        stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
         
-        # Determine output files from stdout
-        graph_files = []
-        if generate_graph:
-            for line in stdout.splitlines():
-                if "plot saved to:" in line:
-                    graph_file = line.split("plot saved to:")[1].strip()
-                    if os.path.exists(graph_file):
-                        graph_files.append(graph_file)
+        os.chdir(original_cwd)
         
-        result = {
+        return {
             "success": True,
             "output": stdout,
             "command": " ".join(cmd),
@@ -527,15 +341,10 @@ async def analyze_error_codes(
             "git_logging_enabled": True
         }
         
-        if graph_files:
-            result["graph_files"] = graph_files
-        
-        if output_analysis and os.path.exists(output_analysis):
-            result["analysis_file"] = output_analysis
-        
-        return result
-        
     except Exception as e:
+        if 'original_cwd' in locals():
+            os.chdir(original_cwd)
+            
         return {
             "success": False,
             "error": f"Error analysis failed: {str(e)}",
@@ -552,14 +361,18 @@ async def decode_error_code(error_code: str) -> Dict[str, Any]:
         error_code: Hex error code to decode (e.g., "1E01" or "0x1E01")
     """
     try:
+        original_cwd = os.getcwd()
+        os.chdir(PROJECT_ROOT)
+        
         env = os.environ.copy()
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        # Use the error analysis CLI directly for single error decoding
-        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.device_monitoring.cli", "decode", error_code]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "analyze-errors", "decode", error_code]
         
-        stdout, stderr = await run_command_with_env(cmd, env)
+        stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
+        
+        os.chdir(original_cwd)
         
         return {
             "success": True,
@@ -568,6 +381,9 @@ async def decode_error_code(error_code: str) -> Dict[str, Any]:
         }
         
     except Exception as e:
+        if 'original_cwd' in locals():
+            os.chdir(original_cwd)
+            
         return {
             "success": False,
             "error": f"Error code decoding failed: {str(e)}"
@@ -578,24 +394,28 @@ async def decode_error_code(error_code: str) -> Dict[str, Any]:
 # UTILITY FUNCTIONS
 # -----------------
 
-async def run_command_with_env(cmd: List[str], env: Dict[str, str]) -> tuple:
+async def run_command_with_env(cmd: List[str], env: Dict[str, str], cwd: Optional[str] = None) -> tuple:
     """
     Run a command asynchronously with custom environment variables.
     
     Args:
         cmd: Command to run as a list of strings
         env: Environment variables dictionary
+        cwd: Working directory for the command
         
     Returns:
         Tuple of (stdout, stderr) as strings
     """
-    print(f"Running command with MCP env: {' '.join(cmd)}")
+    print(f"Running command with MCP env in {cwd}: {' '.join(cmd)}")
+    print(f"DB_USER in env: {'DB_USER' in env}")
+    print(f"MCP_SESSION in env: {env.get('MCP_SESSION', 'not set')}")
     
     process = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        env=env
+        env=env,
+        cwd=cwd
     )
     
     stdout, stderr = await process.communicate()
@@ -608,12 +428,6 @@ async def run_command_with_env(cmd: List[str], env: Dict[str, str]) -> tuple:
         raise Exception(f"Command failed with exit code {process.returncode}: {error_message}")
     
     return stdout_str, stderr_str
-
-
-async def run_command(cmd: List[str]) -> tuple:
-    """Run a command asynchronously and return its stdout and stderr."""
-    env = os.environ.copy()
-    return await run_command_with_env(cmd, env)
 
 
 # -----------------
@@ -629,9 +443,9 @@ async def list_data_files(directory: Optional[str] = None) -> Dict[str, Any]:
         directory: Path to the directory to list (default: ./data)
     """
     try:
-        # Default to data directory if none specified
+        # Default to data directory in project root if none specified
         if directory is None:
-            directory = os.path.join(os.getcwd(), "data")
+            directory = str(PROJECT_ROOT / "data")
         
         # Ensure the directory exists
         if not os.path.exists(directory):
@@ -713,11 +527,51 @@ async def list_data_files(directory: Optional[str] = None) -> Dict[str, Any]:
         }
 
 
+@mcp.tool("check_environment")
+async def check_environment() -> Dict[str, Any]:
+    """Check the current environment and configuration status."""
+    try:
+        env_file = PROJECT_ROOT / ".env"
+        
+        result = {
+            "success": True,
+            "project_root": str(PROJECT_ROOT),
+            "env_file_exists": env_file.exists(),
+            "env_file_path": str(env_file),
+            "current_working_directory": os.getcwd(),
+            "python_executable": PYTHON_EXECUTABLE,
+            "environment_variables": {}
+        }
+        
+        # Check for key environment variables
+        key_vars = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'PARTICLE_ACCESS_TOKEN', 'CDS_API_KEY']
+        for var in key_vars:
+            result["environment_variables"][var] = {
+                "exists": var in os.environ,
+                "value": "***" if var in os.environ and var in ['DB_PASSWORD', 'PARTICLE_ACCESS_TOKEN', 'CDS_API_KEY'] else os.environ.get(var, "NOT SET")
+            }
+        
+        return result
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Environment check failed: {str(e)}"
+        }
+
+
 # Start the server when the script is run directly
 if __name__ == "__main__":
     # Print some debug info
     print(f"Python executable: {PYTHON_EXECUTABLE}")
     print(f"Project root: {PROJECT_ROOT}")
     print(f"Current working directory: {os.getcwd()}")
+    print(f"Environment loaded: {env_loaded}")
+    
+    # Check if .env file exists
+    env_file = PROJECT_ROOT / ".env"
+    print(f".env file exists: {env_file.exists()}")
+    if env_file.exists():
+        print(f".env file path: {env_file}")
     
     mcp.run(transport='stdio')
