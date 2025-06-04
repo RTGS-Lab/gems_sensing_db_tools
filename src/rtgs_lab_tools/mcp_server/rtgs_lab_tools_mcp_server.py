@@ -1,4 +1,4 @@
-"""FastMCP server for RTGS Lab Tools - Natural language interface to all tools."""
+"""FastMCP server for RTGS Lab Tools - Updated to use modular CLI structure."""
 
 import asyncio
 import json
@@ -17,11 +17,6 @@ PYTHON_EXECUTABLE = sys.executable
 
 # Get the root directory of the project
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-RTGS_CLI_PATH = PROJECT_ROOT / "src" / "rtgs_lab_tools" / "cli.py"
-
-# Original script paths for backward compatibility
-DEVICE_CONFIG_UPDATER_PATH = PROJECT_ROOT / "src" / "rtgs_lab_tools" / "device_management" / "device_config_updater.py"
-
 
 # -----------------
 # DATA EXTRACTION TOOLS
@@ -52,14 +47,17 @@ async def extract_sensing_data(
         note: Description for this data extraction (optional)
     """
     try:
+        # change dir to the project root
+        os.chdir(PROJECT_ROOT)
+
         # Set MCP environment variables for proper git logging
         env = os.environ.copy()
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        # Build command to call the CLI
+        # Build command to call the main CLI router
         cmd = [
-            PYTHON_EXECUTABLE, str(RTGS_CLI_PATH), "data",
+            PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.sensing_data.cli", "extract",
             "--project", project,
             "--output", output_format
         ]
@@ -112,7 +110,7 @@ async def list_available_projects() -> Dict[str, Any]:
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        cmd = [PYTHON_EXECUTABLE, str(RTGS_CLI_PATH), "data", "--list-projects"]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.sensing_data.cli", "list-projects"]
         
         stdout, stderr = await run_command_with_env(cmd, env)
         
@@ -348,7 +346,7 @@ async def update_particle_device_configurations(
 ) -> Dict[str, Any]:
     """
     Update sensor and system configuration on multiple Particle devices with automatic git logging.
-    This tool calls the original device configuration updater to maintain full functionality.
+    This tool calls the new modular CLI to maintain full functionality.
     
     Args:
         config: Configuration as JSON string OR path to configuration file
@@ -367,12 +365,12 @@ async def update_particle_device_configurations(
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        # Use the original script to maintain all functionality and git logging
+        # Use the main CLI router for device configuration
         cmd = [
-            PYTHON_EXECUTABLE, str(ORIGINAL_DEVICE_UPDATER_PATH),
+            PYTHON_EXECUTABLE, str(RTGS_CLI_PATH), "device-config",
             "--config", config,
             "--devices", devices,
-            "--output", output_file,
+            "--output-file", output_file,
             "--max-retries", str(max_retries),
             "--restart-wait", str(restart_wait),
             "--online-timeout", str(online_timeout),
@@ -495,7 +493,7 @@ async def analyze_error_codes(
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        # Call the new CLI error analysis command
+        # Call the main CLI router for error analysis
         cmd = [PYTHON_EXECUTABLE, str(RTGS_CLI_PATH), "analyze-errors", "--file", file_path, "--error-column", error_column]
         
         if generate_graph:
@@ -542,6 +540,37 @@ async def analyze_error_codes(
             "success": False,
             "error": f"Error analysis failed: {str(e)}",
             "command": " ".join(cmd) if 'cmd' in locals() else "N/A"
+        }
+
+
+@mcp.tool("decode_error_code")
+async def decode_error_code(error_code: str) -> Dict[str, Any]:
+    """
+    Decode a single GEMS device error code.
+    
+    Args:
+        error_code: Hex error code to decode (e.g., "1E01" or "0x1E01")
+    """
+    try:
+        env = os.environ.copy()
+        env['MCP_SESSION'] = 'true'
+        env['MCP_USER'] = 'claude'
+        
+        # Use the error analysis CLI directly for single error decoding
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.device_monitoring.cli", "decode", error_code]
+        
+        stdout, stderr = await run_command_with_env(cmd, env)
+        
+        return {
+            "success": True,
+            "output": stdout,
+            "command": " ".join(cmd)
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Error code decoding failed: {str(e)}"
         }
 
 
@@ -689,8 +718,6 @@ if __name__ == "__main__":
     # Print some debug info
     print(f"Python executable: {PYTHON_EXECUTABLE}")
     print(f"Project root: {PROJECT_ROOT}")
-    print(f"RTGS CLI path: {RTGS_CLI_PATH}")
-    print(f"Device config updater path: {DEVICE_CONFIG_UPDATER_PATH}")
     print(f"Current working directory: {os.getcwd()}")
     
     mcp.run(transport='stdio')
