@@ -35,7 +35,7 @@ def cli(ctx, verbose, log_file):
 @click.option('--start-date', default="2018-01-01", help='Start date (YYYY-MM-DD)')
 @click.option('--end-date', help='End date (YYYY-MM-DD), defaults to today')
 @click.option('--node-id', help='Comma-separated list of node IDs to query')
-@click.option('--output-dir', help='Output directory for data files')
+@click.option('--output-dir', help='Output directory for data files (default: ./data)')
 @click.option('--output', type=click.Choice(['csv', 'parquet']), default='csv', help='Output format')
 @click.option('--create-zip', is_flag=True, help='Create zip archive with metadata')
 @click.option('--retry-count', type=int, default=3, help='Maximum retry attempts')

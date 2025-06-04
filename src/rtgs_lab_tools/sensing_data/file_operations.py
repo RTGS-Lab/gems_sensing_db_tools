@@ -37,13 +37,13 @@ def ensure_data_directory(output_dir: Optional[str] = None) -> str:
     """Ensure output directory exists.
     
     Args:
-        output_dir: Optional output directory path. If None, uses current directory.
+        output_dir: Optional output directory path. If None, uses 'data' directory.
         
     Returns:
         Absolute path to the output directory
     """
     if output_dir is None:
-        output_dir = os.getcwd()
+        output_dir = "data"
     
     output_path = Path(output_dir).resolve()
     output_path.mkdir(parents=True, exist_ok=True)
