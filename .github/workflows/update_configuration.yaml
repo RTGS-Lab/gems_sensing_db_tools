@@ -70,7 +70,7 @@ jobs:
           GITHUB_WORKFLOW: ${{ github.workflow }}
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
-          python -m rtgs_lab_tools.device_configuration.cli \
+          python -m rtgs_lab_tools.device_configuration.cli update-config \
             --config "sensing_tools/device_configuration_updater/${{ github.event.inputs.config_file }}" \
             --devices "sensing_tools/device_configuration_updater/${{ github.event.inputs.device_list_file }}" \
             --output ./update_results.json \
