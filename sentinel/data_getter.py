@@ -1,9 +1,13 @@
-#gets data from a database
-#inputs: timeframe, database, project, credentials, node_ids
-#outputs: csv file
+# gets data from a database
+# inputs: timeframe, database, project, credentials, node_ids
+# outputs: csv file
 # utilizes functions from get_sensing_data
 
+# list_available_projects() FUNCITON
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # temporary fix to import modules from parent directory
 
 from dotenv import load_dotenv
 import os
@@ -12,9 +16,14 @@ from psycopg2.extras import RealDictCursor
 import pprint
 from error_code_parser import parse_json_file
 from error_code_parser import load_error_database
+from datetime import datetime, timedelta
+
+from get_sensing_data import create_engine_from_credentials, load_credentials_from_env, get_raw_data, ensure_data_directory, save_data
+
 
 load_dotenv()  # Load environment variables from .env
 
+# use this connection for direct queries
 def get_connection():
     return psycopg2.connect(
         host=os.getenv("DB_HOST"),
@@ -25,8 +34,17 @@ def get_connection():
         cursor_factory=RealDictCursor  # Makes query results dict-like instead of tuples
     )
 
+def load_credentials():
+    return {
+        'host': os.getenv('DB_HOST'),
+        'port': os.getenv('DB_PORT'),
+        'db': os.getenv('DB_NAME'),
+        'user': os.getenv('DB_USER'),
+        'pass': os.getenv('DB_PASSWORD')
+    }
 
 # Example usage of the get_connection function
+# old method for getting data directly from the database
 def fetch_latest_raw_entries(limit=5):
     conn = get_connection()
     cur = conn.cursor()
@@ -42,11 +60,11 @@ def fetch_latest_raw_entries(limit=5):
     conn.close()
     return rows
 
-'''
-Get the most recent diagnostic/v2 row for a given node_id where the message contains 
-a Kestrel object inside Diagnostic -> Devices, and then
-extract the first value in PORT_V as the battery level.
-'''
+
+# Get the most recent diagnostic/v2 row for a given node_id where the message contains 
+# a Kestrel object inside Diagnostic -> Devices, and then
+# extract the first value in PORT_V as the battery level.
+# old method for getting data directly from the database
 def fetch_latest_battery(node_id):
     conn = get_connection()
     cur = conn.cursor()
@@ -74,87 +92,64 @@ def fetch_latest_battery(node_id):
     cur.close()
     conn.close()
 
-    return row
-
-# node_id = "e00fce68f374e425e2d6b891" 
-# battery = fetch_latest_battery(node_id)
-
-# if battery:
-#     print(f"Latest battery reading (voltage) for node {battery['node_id']} on \n[{battery['publish_time']}] is: {battery['battery_voltage']}")
-#     # print(f"[{battery['publish_time']}] Battery voltage: {battery['battery_voltage']} V")
-# else:
-#     print("No recent diagnostic entry with Kestrel found.")
+    return row # battery['node_id'], battery['battery_voltage'], battery['publish_time']
 
 
 
+def get_data(start_date, end_date, project, node_ids=None):
+    #create engine using get_sensing_data methods
+    #get the raw data using get_sensning_data methods
+    #save the data using the same methods
+    #return filepath to csv
 
-# sentinel/main.py
-# Load error database (fetches from github if not found locally)
-error_db = load_error_database(None) # 
-if not error_db:
-  print("Failed to load error database. Cannot continue.")
-generate_graph = False
-node_filter = []
-# Parse the JSON file and generate the graph if needed
+    creds = load_credentials()
+    engine = create_engine_from_credentials(creds)
+    raw_data_df = get_raw_data(engine, project, node_ids, start_date, end_date) # df = dataframe
 
-'''
-This function will parse the JSON file containing error codes and generate a graph if specified.
-Parameters:
-- json_file: The path to the JSON file containing error codes.
-- error_db: The error database to load the error codes into.
-- node_filter: A list of nodes to filter the error codes by.
-Returns:
-- Dictionary containing the parsed nodes and the frequency of their errors.
-{
-    "all": Counter({
-        "0x80070000": 3,
-        "0x500400f6": 2,
-        "0xf00500f9": 1
-    }),
-    "nqepuig3898tva7fg": Counter({
-        "0x80070000": 2,
-        "0x500400f6": 1
-    }),
-    "qiubgv9q984g3qreg": Counter({
-        "0x80070000": 1,
-        "0x500400f6": 1,
-        "0xf00500f9": 1
-    })
-}
+    if raw_data_df.empty:
+        print("No data found for the given timeframe.")
+        return None
+    
+    # Save the data to a CSV file
+    # Format the start and end dates for the filename
+    start_date_str = start_date.replace('-', '')
+    end_date_str = end_date.replace('-', '') if end_date else datetime.now().strftime('%Y%m%d')
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    
+    # Create the filename
+    filename = f"{start_date_str}_{end_date_str}_{project}_{timestamp}"
 
-Keys are strings: "all" and possibly node IDs (like "12345", "nodeA", etc.).
-Values are collections.Counter objects, which are like dictionaries that count occurrences of things.
-'''
-error_counters = parse_json_file("error_codes.json", error_db, node_filter)
+    # ensure data directory exists
+    data_dir = ensure_data_directory()
+    
+    # Save the data
+    print(f"Saving data...")
+    output_file = save_data(
+      raw_data_df, 
+      data_dir, 
+      filename,
+      format='csv'
+    )
 
-for node, errors in error_counters.items():
-    print(f"Node: {node}")
-    for error, count in errors.items():
-        print(f"  Error: {error}, Count: {count}")
-    print("\n")
+    # Construct the full path to the saved CSV file
+    output_path = os.path.join(data_dir, output_file)
+
+    # Return the full path to the saved CSV file
+    print(f"Data saved to {output_path}")
+    return output_path
 
 
 
-def visualize_error_counts(error_counters):
-    """
-    Visualize the output of parse_json_file() as bar charts.
-    Each key in error_counters is a node (or 'all'), and its value is a Counter of error codes.
-    """
-    import matplotlib.pyplot as plt
+# Example usage (getting the data for the last 24 hrs):
+# Currently, we can only get data from one project at a time.
+if __name__ == "__main__":
+    start_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    end_date = datetime.now().strftime('%Y-%m-%d')
+    node_ids = None  # Example node ID
+    project = 'Roadside Turf'
 
-    for node_id, counter in error_counters.items():
-        if not counter:
-            continue
-        codes, counts = zip(*counter.most_common())
-        plt.figure(figsize=(12, 6))
-        plt.bar(codes, counts, color='skyblue')
-        plt.title(f"Error Code Frequency for Node '{node_id}'")
-        plt.xlabel("Error Code")
-        plt.ylabel("Count")
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
-        plt.show()
-
-# Example usage:
-# error_counters = parse_json_file('your_file.json', error_db)
-# visualize_error_counts(error_counters)
+    data_path = get_data(start_date, end_date, project, node_ids)
+    if data_path:
+        print(f"Data file created: {data_path}")
+    else:
+        print("No data was retrieved.")

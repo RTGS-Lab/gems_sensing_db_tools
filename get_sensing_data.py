@@ -281,44 +281,59 @@ def get_raw_data(engine, project, node_ids=None, start_date=None, end_date=None,
         start_date = "2018-01-01"
     if end_date is None:
         end_date = datetime.now().strftime("%Y-%m-%d")
+
+    # Check if project is "ALL" to handle special case
+    all_projects_mode = project.upper() == "ALL"
     
-    # First check if the project exists
-    project_exists, matching_projects = check_project_exists(engine, project)
-    
-    if not project_exists:
-        available_projects = list_available_projects(engine)
-        if available_projects:
-            # Format first 10 projects with node counts
-            projects_list = [f"{p} ({c} nodes)" for p, c in available_projects[:10]]
-            projects_str = ", ".join(projects_list)
-            
-            if len(available_projects) > 10:
-                total_remaining_nodes = sum(count for _, count in available_projects[10:])
-                projects_str += f", ... and {len(available_projects) - 10} more projects with {total_remaining_nodes} nodes"
-            
-            error_msg = f"Project '{project}' not found. Available projects include: {projects_str}"
-        else:
-            error_msg = f"Project '{project}' not found and no projects are available. Please check database connection and permissions."
+    # If all projects mode, we don't need to check for specific project existence
+    if not all_projects_mode: 
+
+        # First check if the project exists
+        project_exists, matching_projects = check_project_exists(engine, project)
         
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        if not project_exists:
+            available_projects = list_available_projects(engine)
+            if available_projects:
+                # Format first 10 projects with node counts
+                projects_list = [f"{p} ({c} nodes)" for p, c in available_projects[:10]]
+                projects_str = ", ".join(projects_list)
+                
+                if len(available_projects) > 10:
+                    total_remaining_nodes = sum(count for _, count in available_projects[10:])
+                    projects_str += f", ... and {len(available_projects) - 10} more projects with {total_remaining_nodes} nodes"
+                
+                error_msg = f"Project '{project}' not found. Available projects include: {projects_str}"
+            else:
+                error_msg = f"Project '{project}' not found and no projects are available. Please check database connection and permissions."
+            
+            logger.error(error_msg)
+            raise ValueError(error_msg)
     
     # If there are multiple matching projects, log them with node counts
-    if len(matching_projects) > 1:
-        projects_with_counts = [f"{p} ({c} nodes)" for p, c in matching_projects]
-        logger.info(f"Multiple projects match '{project}':")
-        for proj, count in matching_projects:
-            logger.info(f"  - {proj} ({count} nodes)")
-        logger.info(f"Using pattern '%{project}%' to match all of them")
+    if not all_projects_mode:
+        if len(matching_projects) > 1:
+            projects_with_counts = [f"{p} ({c} nodes)" for p, c in matching_projects]
+            logger.info(f"Multiple projects match '{project}':")
+            for proj, count in matching_projects:
+                logger.info(f"  - {proj} ({count} nodes)")
+            logger.info(f"Using pattern '%{project}%' to match all of them")
     
     # Build query for raw data
-    query = """
-    SELECT r.id, r.node_id, r.publish_time, r.ingest_time, r.event, r.message, r.message_id
-    FROM raw r
-    JOIN node n ON r.node_id = n.node_id
-    WHERE n.project LIKE :project
-    AND r.publish_time BETWEEN :start_date AND :end_date
-    """
+    if all_projects_mode:
+        query = """
+        SELECT r.id, r.node_id, r.publish_time, r.ingest_time, r.event, r.message, r.message_id
+        FROM raw r
+        JOIN node n ON r.node_id = n.node_id
+        WHERE r.publish_time BETWEEN :start_date AND :end_date
+        """
+    else:
+        query = """
+        SELECT r.id, r.node_id, r.publish_time, r.ingest_time, r.event, r.message, r.message_id
+        FROM raw r
+        JOIN node n ON r.node_id = n.node_id
+        WHERE n.project LIKE :project
+        AND r.publish_time BETWEEN :start_date AND :end_date
+        """
     
     # Add node_id filter if specified
     if node_ids:
@@ -339,10 +354,16 @@ def get_raw_data(engine, project, node_ids=None, start_date=None, end_date=None,
             for attempt in range(max_retries):
                 try:
                     logger.info("Executing query...")
-                    result = conn.execute(
-                        text(query),
-                        {"project": f"%{project}%", "start_date": start_date, "end_date": end_date}
-                    )
+                    # result = conn.execute(
+                    #     text(query),
+                    #     {"project": f"%{project}%", "start_date": start_date, "end_date": end_date}
+                    # )
+                    # Prepare parameters based on project mode
+                    params = {"start_date": start_date, "end_date": end_date}
+                    if not all_projects_mode:
+                        params["project"] = f"%{project}%"
+
+                    result = conn.execute(text(query), params)
                     
                     # Fetch results and convert to DataFrame
                     data = result.fetchall()
