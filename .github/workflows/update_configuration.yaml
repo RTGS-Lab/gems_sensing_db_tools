@@ -71,8 +71,8 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
           python -m rtgs_lab_tools.device_configuration.cli update-config \
-            --config "sensing_tools/device_configuration_updater/${{ github.event.inputs.config_file }}" \
-            --devices "sensing_tools/device_configuration_updater/${{ github.event.inputs.device_list_file }}" \
+            --config "src/rtgs_lab_tools/device_configuration/configurations/${{ github.event.inputs.config_file }}" \
+            --devices "src/rtgs_lab_tools/device_configuration/devices/${{ github.event.inputs.device_list_file }}" \
             --output ./update_results.json \
             --max-retries ${{ github.event.inputs.max_retries }} \
             --restart-wait ${{ github.event.inputs.restart_wait }} \
