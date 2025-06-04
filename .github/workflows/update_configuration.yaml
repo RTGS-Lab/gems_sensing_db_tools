@@ -55,7 +55,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e .
-          fi
 
       - name: Configure git
         run: |
