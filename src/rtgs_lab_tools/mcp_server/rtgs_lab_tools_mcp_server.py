@@ -21,7 +21,6 @@ RTGS_CLI_PATH = PROJECT_ROOT / "src" / "rtgs_lab_tools" / "cli.py"
 
 # Original script paths for backward compatibility
 DEVICE_CONFIG_UPDATER_PATH = PROJECT_ROOT / "src" / "rtgs_lab_tools" / "device_management" / "device_config_updater.py"
-ORIGINAL_DEVICE_UPDATER_PATH = PROJECT_ROOT / "sensing_tools" / "device_configuration_updater" / "update_device_configurations.py"
 
 
 # -----------------
@@ -691,8 +690,7 @@ if __name__ == "__main__":
     print(f"Python executable: {PYTHON_EXECUTABLE}")
     print(f"Project root: {PROJECT_ROOT}")
     print(f"RTGS CLI path: {RTGS_CLI_PATH}")
-    print(f"Device config updater path: {ORIGINAL_DEVICE_UPDATER_PATH}")
-    print(f"Error parser path: {ERROR_PARSER_PATH}")
+    print(f"Device config updater path: {DEVICE_CONFIG_UPDATER_PATH}")
     print(f"Current working directory: {os.getcwd()}")
     
     mcp.run(transport='stdio')
