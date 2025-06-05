@@ -126,8 +126,20 @@ def update_config(ctx, config, devices, output, max_retries, restart_wait, onlin
             'end_time': datetime.now().isoformat()
         }
         
+        # Create device summary
+        device_summary = ""
+        for device_result in results['device_results']:
+            status = "✅" if device_result['success'] else "❌"
+            device_summary += f"- {status} `{device_result['device_id']}` - "
+            if device_result['success']:
+                device_summary += f"Success (System UID: {device_result.get('system_uid', 'N/A')}, Sensor UID: {device_result.get('sensor_uid', 'N/A')})\n"
+            else:
+                device_summary += f"Failed: {device_result.get('error', 'Unknown error')}\n"
+        
         additional_sections = {
-            "Update Summary": f"- **Successful**: {results['summary']['successful']}/{results['summary']['total_devices']} devices\n- **Success Rate**: {cli_results['success_rate']:.1f}%\n- **Results**: {output}"
+            "Update Summary": f"- **Successful**: {results['summary']['successful']}/{results['summary']['total_devices']} devices\n- **Success Rate**: {cli_results['success_rate']:.1f}%\n- **Expected System UID**: {results['summary'].get('expected_system_uid', 'N/A')}\n- **Expected Sensor UID**: {results['summary'].get('expected_sensor_uid', 'N/A')}\n- **Results**: {output}",
+            "Device List": device_summary.rstrip(),
+            "Configuration Applied": f"```json\n{json.dumps(config_data, indent=2)}\n```"
         }
         
         cli_ctx.log_success(

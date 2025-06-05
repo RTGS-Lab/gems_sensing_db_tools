@@ -10,11 +10,11 @@ on:
       config_file:
         description: 'Path to configuration file'
         required: true
-        default: 'configurations/config.json'
+        default: 'config.json'
       device_list_file:
         description: 'Path to device list file'
         required: true
-        default: 'devices/devices.txt'
+        default: 'devices.txt'
       max_retries:
         description: 'Maximum retry attempts per device'
         required: false
