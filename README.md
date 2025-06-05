@@ -193,25 +193,25 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
    ```
 
 2. Add to Claude Desktop configuration:
-   ```json
-  {
-  "mcpServers": {
-    "particle": {_
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/ABSOLUTE_PATH_TO_REPOSITORY/src/rtgs_lab_tools/mcp_server/particle-mcp-server/",
-        "run",
-        "particle.py"
-      ]
-    },
-    "rtgs_lab_tools": {
-      "command": "/ABSOLUTE_PATH_TO_REPOSITORY/venv/bin/python",
-      "args": ["-m", "rtgs_lab_tools.mcp_server.rtgs_lab_tools_mcp_server"]
+  ```json
+    {
+    "mcpServers": {
+      "particle": {_
+        "command": "uv",
+        "args": [
+          "--directory",
+          "/ABSOLUTE_PATH_TO_REPOSITORY/src/rtgs_lab_tools/mcp_server/particle-mcp-server/",
+          "run",
+          "particle.py"
+        ]
+      },
+      "rtgs_lab_tools": {
+        "command": "/ABSOLUTE_PATH_TO_REPOSITORY/venv/bin/python",
+        "args": ["-m", "rtgs_lab_tools.mcp_server.rtgs_lab_tools_mcp_server"]
+      }
     }
-   }
-  }
-   ```
+    }
+  ```
 
 3. Use natural language to operate tools:
    ```
