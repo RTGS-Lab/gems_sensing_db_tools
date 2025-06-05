@@ -196,7 +196,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
   ```json
     {
     "mcpServers": {
-      "particle": {_
+      "particle": {
         "command": "uv",
         "args": [
           "--directory",
@@ -209,7 +209,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
         "command": "/ABSOLUTE_PATH_TO_REPOSITORY/venv/bin/python",
         "args": ["-m", "rtgs_lab_tools.mcp_server.rtgs_lab_tools_mcp_server"]
       }
-    }
+     }
     }
   ```
 
