@@ -274,7 +274,7 @@ class GitLogger:
             # Create commit message
             status = "✅" if results.get('success', True) else "❌"
             commit_message = (
-                f"📝 {self.tool_name} log: {operation} {status} - "
+                f"{self.tool_name} log: {operation} {status} - "
                 f"{context['execution_source']} by {context['triggered_by']}"
             )
             

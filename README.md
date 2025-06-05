@@ -59,16 +59,16 @@ RTGS Lab Tools consolidates multiple environmental data analysis workflows into 
 - PostgreSQL client libraries (for GEMS database access)
 - UMN VPN connection (for database access)
 
-### Installation
+### Installation of Everything
 ```bash
 git clone https://github.com/RTGS-Lab/rtgs-lab-tools.git
 cd rtgs-lab-tools
 python -m venv venv
 source venv/bin/activate
-pip install -e .
+pip install -e .[all]
 ```
 
-### Optional Dependencies
+### Optional Dependencies (only if you only want specific parts of the tool)
 ```bash
 # For climate data access
 pip install rtgs-lab-tools[climate]
@@ -168,6 +168,24 @@ rtgs analyze-errors data.csv --output-analysis error_report.json
 
 The package includes a FastMCP server that enables natural language interaction with all tools through Claude or other LLM clients.
 
+### Dependencies
+1. The particle-mcp-server submodule requires uv package manager, install it with:
+mac/linux
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+windows
+```
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+### Use with Claude Code
+1. Clone and install as normal
+2. Navigate to repository and start Claude Code with 'claude'
+3. .mcp.json includes all configuration and Claude Code should recognize
+4. verify the mcps are running with /mcp once in Claude Code
+
 ### Setup with Claude Desktop
 1. Install the package with MCP support:
    ```bash
@@ -178,17 +196,17 @@ The package includes a FastMCP server that enables natural language interaction 
    ```json
   {
   "mcpServers": {
-    "particle": {
+    "particle": {_
       "command": "uv",
       "args": [
         "--directory",
-        "/home/zach/Code/gems_sensing_db_tools/src/rtgs_lab_tools/mcp_server/particle-mcp-server/",
+        "/ABSOLUTE_PATH_TO_REPOSITORY/src/rtgs_lab_tools/mcp_server/particle-mcp-server/",
         "run",
         "particle.py"
       ]
     },
     "rtgs_lab_tools": {
-      "command": "/home/zach/Code/gems_sensing_db_tools/venv/bin/python",
+      "command": "/ABSOLUTE_PATH_TO_REPOSITORY/venv/bin/python",
       "args": ["-m", "rtgs_lab_tools.mcp_server.rtgs_lab_tools_mcp_server"]
     }
    }
