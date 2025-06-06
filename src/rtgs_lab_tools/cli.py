@@ -9,23 +9,23 @@ def cli():
     pass
 
 
-# Import and add the individual tool commands directly
+# Import and add the grouped CLI commands
 def register_commands():
-    """Register all tool commands with the main CLI."""
+    """Register all tool command groups with the main CLI."""
     
-    # Import the actual command functions from each tool
-    from .sensing_data.cli import data_command
-    from .visualization.cli import visualize_command
-    from .gridded_data.cli import era5_command
-    from .device_configuration.cli import device_config_command
-    from .device_monitoring.cli import analyze_errors_command
+    # Import the grouped CLI commands from each tool
+    from .sensing_data.cli import sensing_data_cli
+    from .visualization.cli import visualization_cli
+    from .gridded_data.cli import gridded_data_cli
+    from .device_configuration.cli import device_configuration_cli
+    from .device_monitoring.cli import error_analysis_cli
     
     # Add them to the main CLI with their specific names
-    cli.add_command(data_command, name='data')
-    cli.add_command(visualize_command, name='visualize')
-    cli.add_command(era5_command, name='era5')
-    cli.add_command(device_config_command, name='device-config')
-    cli.add_command(analyze_errors_command, name='analyze-errors')
+    cli.add_command(sensing_data_cli, name='sensing-data')
+    cli.add_command(visualization_cli, name='visualization')
+    cli.add_command(gridded_data_cli, name='gridded-data')
+    cli.add_command(device_configuration_cli, name='device-configuration')
+    cli.add_command(error_analysis_cli, name='device-monitoring')
 
 
 # Register commands when the module is imported

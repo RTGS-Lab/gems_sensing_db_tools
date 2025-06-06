@@ -1,9 +1,11 @@
 """Sensing data tools for RTGS Lab Tools."""
 
-from .data_extractor import get_raw_data, list_projects, get_nodes_for_project
+from .data_extractor import extract_data, list_available_projects, get_raw_data, list_projects, get_nodes_for_project
 from .file_operations import save_data, create_zip_archive
 
 __all__ = [
+    "extract_data",
+    "list_available_projects", 
     "get_raw_data",
     "list_projects", 
     "get_nodes_for_project",

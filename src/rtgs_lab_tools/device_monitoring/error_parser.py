@@ -5,6 +5,7 @@ import logging
 import re
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Any, Optional, Union
 
 import pandas as pd
@@ -83,15 +84,23 @@ class ErrorCodeParser:
             if code_str.startswith('0X'):
                 code_str = code_str[2:]
             
-            # Validate length (should be 4 hex digits)
-            if len(code_str) != 4:
-                raise ValidationError(f"Error code must be 4 hex digits, got: {code_str}")
+            # Validate length (should be 4-8 hex digits for GEMS error codes)
+            if len(code_str) < 4 or len(code_str) > 8:
+                raise ValidationError(f"Error code must be 4-8 hex digits, got: {code_str}")
             
-            # Parse components
-            error_class = code_str[0]
-            hardware_device = code_str[1] 
-            hardware_sub_device = code_str[2]
-            specific_error = code_str[3]
+            # Parse components based on code length
+            if len(code_str) == 8:
+                # 8-digit format: 0xCCCDDDSS where C=class, D=device, S=subdevice
+                error_class = code_str[0]
+                hardware_device = code_str[6] if len(code_str) >= 7 else '0'
+                hardware_sub_device = code_str[7] if len(code_str) >= 8 else '0'
+                specific_error = code_str[1:6]  # Middle part
+            else:
+                # 4-digit format: CCDX where C=class, D=device, X=sub
+                error_class = code_str[0]
+                hardware_device = code_str[1] 
+                hardware_sub_device = code_str[2]
+                specific_error = code_str[3]
             
             # Look up descriptions
             parsed = {
@@ -171,45 +180,29 @@ class ErrorCodeParser:
         return pd.DataFrame(parsed_errors)
     
     def _extract_error_codes_from_json(self, data: Dict[str, Any]) -> List[str]:
-        """Extract error codes from JSON data structure."""
+        """Extract error codes from JSON data structure using GEMS format."""
         error_codes = []
         
-        # Common error code locations in GEMS data
-        possible_paths = [
-            ['Error', 'Code'],
-            ['Diagnostic', 'Error'],
-            ['Status', 'Error'],
-            ['error_code'],
-            ['error'],
-            ['errors']
-        ]
-        
-        for path in possible_paths:
-            value = data
-            for key in path:
-                if isinstance(value, dict) and key in value:
-                    value = value[key]
-                else:
-                    value = None
-                    break
+        # Check if this is an error record in GEMS format (this is the primary source)
+        if "Error" in data and "Devices" in data["Error"]:
+            devices = data["Error"]["Devices"]
             
-            if value is not None:
-                if isinstance(value, list):
-                    error_codes.extend([str(v) for v in value])
-                else:
-                    error_codes.append(str(value))
-        
-        # Also look for hex patterns in string values
-        error_codes.extend(self._find_hex_patterns(str(data)))
+            # Process each device in the error record
+            for device_entry in devices:
+                for device_name, device_info in device_entry.items():
+                    # Process each error code for this device
+                    if "CODES" in device_info and isinstance(device_info["CODES"], list):
+                        for code in device_info["CODES"]:
+                            error_codes.append(str(code).lower())
         
         return list(set(error_codes))  # Remove duplicates
     
     def _find_hex_patterns(self, text: str) -> List[str]:
-        """Find 4-digit hex patterns that could be error codes."""
-        # Pattern for 4-digit hex codes, optionally prefixed with 0x
-        pattern = r'\b(?:0[xX])?([0-9A-Fa-f]{4})\b'
+        """Find hex patterns that could be error codes."""
+        # Pattern for hex codes, optionally prefixed with 0x (4-8 digits)
+        pattern = r'\b(?:0[xX])?([0-9A-Fa-f]{4,8})\b'
         matches = re.findall(pattern, text)
-        return matches
+        return [match.lower() for match in matches]
 
 
 def parse_error_codes(
@@ -288,3 +281,359 @@ def analyze_error_patterns(
     logger.info(f"Analyzed {analysis['total_errors']} errors with {analysis['unique_error_codes']} unique codes")
     
     return analysis
+
+
+# CLI Helper Functions for Error Analysis
+def load_data_file(file_path: str) -> pd.DataFrame:
+    """
+    Load data from CSV or JSON file.
+    
+    Args:
+        file_path: Path to the data file
+        
+    Returns:
+        DataFrame with loaded data
+        
+    Raises:
+        ValueError: If file format is not supported
+        FileNotFoundError: If file doesn't exist
+    """
+    file_path = Path(file_path)
+    
+    if not file_path.exists():
+        raise FileNotFoundError(f"Data file not found: {file_path}")
+    
+    if file_path.suffix.lower() == '.csv':
+        return pd.read_csv(file_path)
+    elif file_path.suffix.lower() == '.json':
+        return pd.read_json(file_path)
+    else:
+        raise ValueError(f"Unsupported file format: {file_path.suffix}. Supported formats: .csv, .json")
+
+
+def filter_by_nodes(df: pd.DataFrame, node_filter: list) -> pd.DataFrame:
+    """
+    Filter DataFrame by node IDs.
+    
+    Args:
+        df: Input DataFrame
+        node_filter: List of node IDs to filter by
+        
+    Returns:
+        Filtered DataFrame
+    """
+    if 'node_id' not in df.columns:
+        # Try alternative column names
+        node_columns = [col for col in df.columns if 'node' in col.lower()]
+        if not node_columns:
+            raise ValueError("No node ID column found in data. Expected 'node_id' or similar.")
+        node_col = node_columns[0]
+    else:
+        node_col = 'node_id'
+    
+    return df[df[node_col].isin(node_filter)]
+
+
+def setup_output_directory(output_dir: str) -> Path:
+    """
+    Set up output directory for plots and analysis results.
+    
+    Args:
+        output_dir: Path to output directory
+        
+    Returns:
+        Path object for the created directory
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    return output_path
+
+
+def create_error_frequency_plot(
+    errors_df: pd.DataFrame, 
+    output_dir: Path, 
+    node_id: str,
+    top_n: int = 10
+) -> Optional[str]:
+    """
+    Create error frequency plot.
+    
+    Args:
+        errors_df: DataFrame with parsed error data
+        output_dir: Output directory for the plot
+        node_id: Node ID for the plot (used in filename)
+        top_n: Number of top errors to include in plot
+        
+    Returns:
+        Path to the generated plot file, or None if no data
+    """
+    if errors_df.empty:
+        return None
+    
+    try:
+        # Import matplotlib here to avoid import issues if not available
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        
+        # Count error frequencies
+        if 'normalized_code' in errors_df.columns:
+            error_counts = errors_df['normalized_code'].value_counts().head(top_n)
+        elif 'error_code' in errors_df.columns:
+            error_counts = errors_df['error_code'].value_counts().head(top_n)
+        else:
+            # Fallback to any column that might contain error info
+            error_cols = [col for col in errors_df.columns if 'error' in col.lower() or 'code' in col.lower()]
+            if not error_cols:
+                return None
+            error_counts = errors_df[error_cols[0]].value_counts().head(top_n)
+        
+        if error_counts.empty:
+            return None
+        
+        # Create the plot
+        plt.figure(figsize=(12, 8))
+        sns.barplot(x=error_counts.values, y=error_counts.index)
+        
+        plt.title(f'Top {len(error_counts)} Error Codes - {node_id}')
+        plt.xlabel('Frequency')
+        plt.ylabel('Error Code')
+        plt.tight_layout()
+        
+        # Generate filename
+        if node_id == "all":
+            filename = f"error_frequency_all_nodes.png"
+        else:
+            filename = f"error_frequency_{node_id}.png"
+        
+        plot_path = output_dir / filename
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        return str(plot_path)
+        
+    except ImportError:
+        logger.warning("Matplotlib/seaborn not available. Skipping plot generation.")
+        return None
+    except Exception as e:
+        logger.warning(f"Could not create error frequency plot: {e}")
+        return None
+
+
+def display_enhanced_error_analysis(parsed_errors_df: pd.DataFrame, analysis: Dict[str, Any], node_filter: Optional[List[str]] = None):
+    """Display enhanced error analysis with detailed breakdowns like the original script."""
+    
+    if parsed_errors_df.empty:
+        print("No errors found in the file.")
+        return
+    
+    # Load error code database for enhanced translations
+    print("Loading error code database...")
+    error_db = load_errorcodes_database()
+    
+    # Show per-node analysis if filtering by specific nodes or "all"
+    if node_filter:
+        if 'all' in node_filter:
+            # Show analysis for all unique nodes in the data
+            unique_nodes = parsed_errors_df['node_id'].unique()
+            for node_id in unique_nodes:
+                node_errors = parsed_errors_df[parsed_errors_df['node_id'] == node_id]
+                if not node_errors.empty:
+                    print(f"\n=== ERROR SUMMARY FOR NODE {node_id} ===")
+                    print(f"Found {len(node_errors)} errors of {node_errors['normalized_code'].nunique()} distinct types:")
+                    
+                    # Get error counts for this node
+                    error_counts = node_errors['normalized_code'].value_counts()
+                    
+                    # Print each error with enhanced details
+                    for code, count in error_counts.items():
+                        error_info = node_errors[node_errors['normalized_code'] == code].iloc[0]
+                        print_enhanced_error_details(code, count, error_info, error_db)
+        else:
+            # Show analysis for specific nodes only
+            for node_id in node_filter:
+                node_errors = parsed_errors_df[parsed_errors_df['node_id'] == node_id]
+                if not node_errors.empty:
+                    print(f"\n=== ERROR SUMMARY FOR NODE {node_id} ===")
+                    print(f"Found {len(node_errors)} errors of {node_errors['normalized_code'].nunique()} distinct types:")
+                    
+                    # Get error counts for this node
+                    error_counts = node_errors['normalized_code'].value_counts()
+                    
+                    # Print each error with enhanced details
+                    for code, count in error_counts.items():
+                        error_info = node_errors[node_errors['normalized_code'] == code].iloc[0]
+                        print_enhanced_error_details(code, count, error_info, error_db)
+                else:
+                    print(f"\nNode {node_id}: No errors found")
+    
+    # Always print overall summary like the original script
+    print("\n=== OVERALL ERROR SUMMARY ===")
+    print(f"Found {analysis['total_errors']} errors of {analysis['unique_error_codes']} distinct types:")
+    
+    # Get the most common errors and print each with enhanced details
+    error_counts = parsed_errors_df['normalized_code'].value_counts()
+    
+    for code, count in error_counts.items():
+        error_info = parsed_errors_df[parsed_errors_df['normalized_code'] == code].iloc[0]
+        print_enhanced_error_details(code, count, error_info, error_db)
+
+
+def print_enhanced_error_details(code: str, count: int, error_info: pd.Series, error_db: Dict[str, Dict[str, str]] = None):
+    """Print enhanced error details with database lookups if available."""
+    
+    # Try to get enhanced description from error database first
+    db_info = find_error_in_db(code, error_db) if error_db else None
+    
+    if db_info:
+        # Use database information for enhanced output
+        specific_name = db_info.get('specific_name', 'Unknown Error')
+        description = db_info.get('description', 'No description available')
+        hardware_device = db_info.get('hardware_device', 'Unknown')
+        hardware_subdevice = db_info.get('hardware_subdevice', 'Unknown')
+        error_class = db_info.get('class', 'Unknown')
+        code_location = db_info.get('code_location', '')
+        
+        print(f"{code} ({count}): {specific_name}")
+        print(f"  Description: {description}")
+        print(f"  Hardware: {hardware_device} / {hardware_subdevice}")
+        print(f"  Class: {error_class}")
+        if code_location:
+            print(f"  Code Location: {code_location}")
+    else:
+        # Fall back to parsed error info
+        description = error_info.get('full_description', 'Unknown error')
+        error_class = error_info.get('error_class_name', 'Unknown')
+        hw_device = error_info.get('hardware_device_name', 'Unknown')
+        hw_subdevice = error_info.get('hardware_sub_device_name', 'Unknown')
+        
+        # Create a comprehensive error description like the original script
+        if hw_device != "Unknown" and hw_subdevice != "Unknown":
+            enhanced_description = f"{error_class} Error - {hw_device} {hw_subdevice}"
+        elif hw_device != "Unknown":
+            enhanced_description = f"{error_class} Error - {hw_device}"
+        else:
+            enhanced_description = f"{error_class} Error"
+        
+        print(f"{code} ({count}): {enhanced_description} - {description}")
+    
+    print()  # Add spacing between error entries
+
+
+def load_errorcodes_database(md_file: Optional[str] = None) -> Dict[str, Dict[str, str]]:
+    """
+    Load error code database from ERRORCODES.md file or fetch from GitHub.
+    This matches the functionality from the original script.
+    """
+    import os
+    import re
+    
+    markdown_content = ""
+    
+    # If md_file is provided and exists, load it
+    if md_file and os.path.exists(md_file):
+        with open(md_file, 'r', encoding='utf-8') as f:
+            markdown_content = f.read()
+    else:
+        # Try to use local ERRORCODES.md file if it exists
+        if os.path.exists('ERRORCODES.md'):
+            with open('ERRORCODES.md', 'r', encoding='utf-8') as f:
+                markdown_content = f.read()
+        else:
+            try:
+                print("Fetching error codes from GitHub...")
+                import requests
+                url = "https://raw.githubusercontent.com/gemsiot/Firmware_-_FlightControl-Demo/refs/heads/master/ERRORCODES.md"
+                response = requests.get(url, allow_redirects=False, timeout=10)
+                if response.status_code == 200:
+                    markdown_content = response.text
+                    print("Got ERRORCODES.md from Github.")
+                    # Save for future use
+                    with open('ERRORCODES.md', 'w', encoding='utf-8') as f:
+                        f.write(markdown_content)
+                else:
+                    print(f"Failed to fetch error codes: HTTP {response.status_code}")
+                    return {}
+            except Exception as e:
+                print(f"Error fetching error codes: {e}")
+                return {}
+    
+    # Parse the markdown table to extract error codes
+    error_db = {}
+    
+    # Find the table section
+    table_match = re.search(r'\| \*\*Base Error Code Hex\*\* \|.*?\n\|[-:|\s]+\|(.*?)(?:\n\n|$)', 
+                            markdown_content, re.DOTALL)
+    
+    if not table_match:
+        print("Could not find error code table in the markdown file.")
+        return {}
+    
+    table_content = table_match.group(1)
+    
+    # Process each row of the table
+    for line in table_content.strip().split('\n'):
+        if not line.startswith('|'):
+            continue
+        
+        # Split the line into columns and remove leading/trailing whitespace
+        columns = [col.strip() for col in line.split('|')[1:-1]]
+        
+        if len(columns) < 12:
+            continue  # Skip malformed rows
+        
+        # Extract relevant information
+        error_info = {
+            "base_error_code_hex": columns[0].lower(),
+            "specific_name": columns[1],
+            "description": columns[2],
+            "base_error_code_value": columns[3],
+            "error_code_structure": columns[4],
+            "class": columns[5],
+            "code": columns[6],
+            "subtype": columns[7],
+            "hardware_device": columns[8],
+            "hardware_subdevice": columns[9],
+            "code_name": columns[10],
+            "code_location": columns[11]
+        }
+        
+        # Use the hex code as the key
+        error_db[error_info["base_error_code_hex"]] = error_info
+    
+    print(f"Loaded {len(error_db)} error codes from database")
+    return error_db
+
+
+def find_error_in_db(hex_code: str, error_db: Dict[str, Dict[str, str]]) -> Dict[str, str]:
+    """Find error in database using the original script's matching logic."""
+    hex_code = hex_code.lower()
+    
+    # Add 0x prefix if not present for database lookup
+    if not hex_code.startswith('0x'):
+        prefixed_code = '0x' + hex_code
+    else:
+        prefixed_code = hex_code
+    
+    # Try exact match first with 0x prefix
+    if prefixed_code in error_db:
+        return error_db[prefixed_code]
+    
+    # Try matching first 6 characters (0xCccc) like original script
+    if len(prefixed_code) >= 6:
+        base_code = prefixed_code[:6]  # e.g., "0x8007" from "0x80070000"
+        for code, info in error_db.items():
+            if code.startswith(base_code):
+                return info
+    
+    # Try without 0x prefix
+    clean_code = hex_code[2:] if hex_code.startswith('0x') else hex_code
+    
+    # Try first 4 characters without 0x for partial matching
+    if len(clean_code) >= 4:
+        base_code = clean_code[:4]
+        search_pattern = '0x' + base_code
+        for code, info in error_db.items():
+            if code.startswith(search_pattern):
+                return info
+    
+    return None

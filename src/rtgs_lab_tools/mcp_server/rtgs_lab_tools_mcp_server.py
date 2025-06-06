@@ -39,8 +39,8 @@ env_loaded = load_env_file()
 # DATA EXTRACTION TOOLS
 # -----------------
 
-@mcp.tool("extract_sensing_data")
-async def extract_sensing_data(
+@mcp.tool("sensing_data_extract")
+async def sensing_data_extract(
     project: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -53,15 +53,25 @@ async def extract_sensing_data(
     """
     Extract raw sensor data from the GEMS Sensing database with automatic git logging.
     
+    This tool extracts environmental sensor data from the GEMS database, processes it,
+    and saves it to CSV or Parquet format. All operations are automatically logged
+    to git for tracking and reproducibility. Perfect for research data analysis,
+    environmental monitoring studies, and scientific investigations.
+    The node_id for this function is the node_id in the Particle ecosystem,
+    which can be matched to a name by listing devices in the Particle ecosystem.
+    
     Args:
-        project: Project name to query (required)
+        project: Project name to query (required) - use list_available_projects to see options
         start_date: Start date in YYYY-MM-DD format (default: 2018-01-01)
         end_date: End date in YYYY-MM-DD format (default: today)
-        node_ids: Comma-separated list of node IDs to query (optional)
+        node_ids: Comma-separated list of node IDs to query specific sensors (optional)
         output_format: Output format - "csv" or "parquet" (default: csv)
-        create_zip: Create a zip archive with metadata (default: False)
+        create_zip: Create a zip archive with metadata for sharing (default: False)
         output_dir: Custom output directory (default: ./data)
-        note: Description for this data extraction (optional)
+        note: Description for this data extraction for git logging (optional)
+    
+    Returns:
+        Dict with success status, output file path, and extraction metadata
     """
     try:
         # Ensure we're in the correct directory
@@ -73,9 +83,9 @@ async def extract_sensing_data(
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        # Build command to call the main CLI
+        # Build command to call the new grouped CLI
         cmd = [
-            PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "data",
+            PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "sensing-data", "extract",
             "--project", project,
             "--output", output_format
         ]
@@ -129,9 +139,22 @@ async def extract_sensing_data(
         }
 
 
-@mcp.tool("list_available_projects")
-async def list_available_projects() -> Dict[str, Any]:
-    """List all available projects in the GEMS Sensing database."""
+@mcp.tool("sensing_data_list_projects")
+async def sensing_data_list_projects() -> Dict[str, Any]:
+    """
+    List all available projects in the GEMS Sensing database.
+    
+    Retrieves a comprehensive list of all environmental monitoring projects
+    available in the GEMS database, including project names and node counts.
+    Use this to discover what data is available before extracting sensor data.
+    Nodes in the Particle ecosystem have a name and a node_id.
+    Projects in the database only contain the node_id but not the name,
+    so this tool requires that the name of the device is searched by listing devices
+    in the Particle ecosystem to match the node_id to a name.
+
+    Returns:
+        Dict with success status and formatted list of projects with node counts
+    """
     try:
         # Ensure we're in the correct directory
         original_cwd = os.getcwd()
@@ -142,7 +165,7 @@ async def list_available_projects() -> Dict[str, Any]:
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "data", "--list-projects"]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "sensing-data", "list-projects"]
         
         stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
         
@@ -170,8 +193,8 @@ async def list_available_projects() -> Dict[str, Any]:
 # VISUALIZATION TOOLS
 # -----------------
 
-@mcp.tool("create_visualization")
-async def create_visualization(
+@mcp.tool("visualization_create")
+async def visualization_create(
     file_path: str,
     parameter: Optional[str] = None,
     node_id: Optional[str] = None,
@@ -182,17 +205,24 @@ async def create_visualization(
     note: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Create visualizations from sensor data with automatic git logging.
+    Create professional visualizations from sensor data with automatic git logging.
+    
+    Generates time-series plots, multi-parameter comparisons, and custom visualizations
+    from GEMS sensor data. Automatically parses sensor messages and creates publication-ready
+    plots. All visualization operations are logged to git for reproducibility.
     
     Args:
-        file_path: Path to the CSV file containing sensor data
-        parameter: Parameter path to plot (e.g., "Data.Devices.0.Temperature")
-        node_id: Specific node ID to plot
+        file_path: Path to the CSV file containing sensor data (required)
+        parameter: Parameter path to plot (e.g., "Data.Devices.0.Temperature") - single parameter mode
+        node_id: Specific node ID to plot when using single parameter mode
         multi_param: List of parameters as "node_id,parameter_path" for multi-parameter plots
-        output_file: Output filename (without extension)
-        format: Output format (png, pdf, svg) (default: png)
-        title: Plot title (optional)
-        note: Description for this visualization (optional)
+        output_file: Custom output filename without extension (optional)
+        format: Output format - "png", "pdf", or "svg" (default: png)
+        title: Custom plot title (optional)
+        note: Description for this visualization for git logging (optional)
+    
+    Returns:
+        Dict with success status, output file path, and visualization metadata
     """
     try:
         # Ensure we're in the correct directory
@@ -204,7 +234,7 @@ async def create_visualization(
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "visualize", "--file", file_path, "--format", format]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "visualization", "create", "--file", file_path, "--format", format]
         
         if parameter:
             cmd.extend(["--parameter", parameter])
@@ -249,9 +279,21 @@ async def create_visualization(
         }
 
 
-@mcp.tool("list_available_parameters")
-async def list_available_parameters(file_path: str) -> Dict[str, Any]:
-    """List available parameters in a sensor data file."""
+@mcp.tool("visualization_list_parameters")
+async def visualization_list_parameters(file_path: str) -> Dict[str, Any]:
+    """
+    List available parameters in a sensor data file for visualization.
+    
+    Analyzes a sensor data CSV file and extracts all available parameters
+    that can be visualized, organized by node ID. Essential for discovering
+    what data is available for plotting before creating visualizations.
+    
+    Args:
+        file_path: Path to the CSV file containing sensor data (required)
+    
+    Returns:
+        Dict with success status and formatted list of parameters by node
+    """
     try:
         original_cwd = os.getcwd()
         os.chdir(PROJECT_ROOT)
@@ -260,7 +302,7 @@ async def list_available_parameters(file_path: str) -> Dict[str, Any]:
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "visualize", "--file", file_path, "--list-params"]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "visualization", "list-parameters", file_path]
         
         stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
         
@@ -286,8 +328,8 @@ async def list_available_parameters(file_path: str) -> Dict[str, Any]:
 # ERROR ANALYSIS TOOLS
 # -----------------
 
-@mcp.tool("analyze_error_codes")
-async def analyze_error_codes(
+@mcp.tool("device_monitoring_analyze")
+async def device_monitoring_analyze(
     file_path: str,
     generate_graph: bool = False,
     node_filter: Optional[str] = None,
@@ -315,7 +357,7 @@ async def analyze_error_codes(
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "analyze-errors", "--file", file_path, "--error-column", error_column]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "device-monitoring", "analyze", "--file", file_path, "--error-column", error_column]
         
         if generate_graph:
             cmd.append("--generate-graph")
@@ -352,8 +394,8 @@ async def analyze_error_codes(
         }
 
 
-@mcp.tool("decode_error_code")
-async def decode_error_code(error_code: str) -> Dict[str, Any]:
+@mcp.tool("device_monitoring_decode")
+async def device_monitoring_decode(error_code: str) -> Dict[str, Any]:
     """
     Decode a single GEMS device error code.
     
@@ -368,7 +410,7 @@ async def decode_error_code(error_code: str) -> Dict[str, Any]:
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "analyze-errors", "decode", error_code]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "device-monitoring", "decode", error_code]
         
         stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
         
@@ -387,6 +429,203 @@ async def decode_error_code(error_code: str) -> Dict[str, Any]:
         return {
             "success": False,
             "error": f"Error code decoding failed: {str(e)}"
+        }
+
+
+# -----------------
+# DEVICE CONFIGURATION TOOLS
+# -----------------
+
+@mcp.tool("device_configuration_update_config")
+async def device_configuration_update_config(
+    config: str,
+    devices: str,
+    output: str = "update_results.json",
+    max_retries: int = 3,
+    restart_wait: int = 30,
+    online_timeout: int = 120,
+    max_concurrent: int = 5,
+    dry_run: bool = False,
+    note: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Update configurations on multiple Particle devices with automatic git logging.
+    
+    Args:
+        config: Path to configuration JSON file OR JSON string (required)
+        devices: Path to device list file OR comma/space separated device IDs (required)
+        output: Output file for results (default: update_results.json)
+        max_retries: Maximum retry attempts per device (default: 3)
+        restart_wait: Seconds to wait for device restart (default: 30)
+        online_timeout: Seconds to wait for device to come online (default: 120)
+        max_concurrent: Maximum concurrent devices to process (default: 5)
+        dry_run: Validate inputs without making changes (default: False)
+        note: Description for this configuration update (optional)
+    """
+    try:
+        original_cwd = os.getcwd()
+        os.chdir(PROJECT_ROOT)
+        
+        # Set MCP environment variables
+        env = os.environ.copy()
+        env['MCP_SESSION'] = 'true'
+        env['MCP_USER'] = 'claude'
+        
+        cmd = [
+            PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "device-configuration", "update-config",
+            "--config", config,
+            "--devices", devices,
+            "--output", output,
+            "--max-retries", str(max_retries),
+            "--restart-wait", str(restart_wait),
+            "--online-timeout", str(online_timeout),
+            "--max-concurrent", str(max_concurrent)
+        ]
+        
+        if dry_run:
+            cmd.append("--dry-run")
+        
+        if note:
+            cmd.extend(["--note", note])
+        
+        stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
+        
+        os.chdir(original_cwd)
+        
+        return {
+            "success": True,
+            "output": stdout,
+            "command": " ".join(cmd),
+            "mcp_execution": True,
+            "git_logging_enabled": True
+        }
+        
+    except Exception as e:
+        if 'original_cwd' in locals():
+            os.chdir(original_cwd)
+            
+        return {
+            "success": False,
+            "error": f"Device configuration update failed: {str(e)}",
+            "command": " ".join(cmd) if 'cmd' in locals() else "N/A"
+        }
+
+
+# -----------------
+# GRIDDED DATA TOOLS
+# -----------------
+
+@mcp.tool("gridded_data_era5")
+async def gridded_data_era5(
+    variables: List[str],
+    start_date: str,
+    end_date: str,
+    area: Optional[str] = None,
+    output_file: Optional[str] = None,
+    pressure_levels: Optional[str] = None,
+    time_hours: Optional[str] = None,
+    note: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Download ERA5 climate data with automatic git logging.
+    
+    Args:
+        variables: List of ERA5 variables to download (required)
+        start_date: Start date in YYYY-MM-DD format (required)
+        end_date: End date in YYYY-MM-DD format (required)
+        area: Bounding box as "north,west,south,east" (optional)
+        output_file: Output NetCDF file path (optional)
+        pressure_levels: Pressure levels (comma-separated) (optional)
+        time_hours: Specific hours (comma-separated, e.g., "00:00,12:00") (optional)
+        note: Description for this data download (optional)
+    """
+    try:
+        original_cwd = os.getcwd()
+        os.chdir(PROJECT_ROOT)
+        
+        # Set MCP environment variables
+        env = os.environ.copy()
+        env['MCP_SESSION'] = 'true'
+        env['MCP_USER'] = 'claude'
+        
+        cmd = [
+            PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "gridded-data", "era5",
+            "--start-date", start_date,
+            "--end-date", end_date
+        ]
+        
+        # Add variables
+        for var in variables:
+            cmd.extend(["--variables", var])
+        
+        if area:
+            cmd.extend(["--area", area])
+        
+        if output_file:
+            cmd.extend(["--output-file", output_file])
+        
+        if pressure_levels:
+            cmd.extend(["--pressure-levels", pressure_levels])
+        
+        if time_hours:
+            cmd.extend(["--time-hours", time_hours])
+        
+        if note:
+            cmd.extend(["--note", note])
+        
+        stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
+        
+        os.chdir(original_cwd)
+        
+        return {
+            "success": True,
+            "output": stdout,
+            "command": " ".join(cmd),
+            "mcp_execution": True,
+            "git_logging_enabled": True
+        }
+        
+    except Exception as e:
+        if 'original_cwd' in locals():
+            os.chdir(original_cwd)
+            
+        return {
+            "success": False,
+            "error": f"ERA5 data download failed: {str(e)}",
+            "command": " ".join(cmd) if 'cmd' in locals() else "N/A"
+        }
+
+
+@mcp.tool("gridded_data_list_variables")
+async def gridded_data_list_variables() -> Dict[str, Any]:
+    """List available ERA5 variables for download."""
+    try:
+        original_cwd = os.getcwd()
+        os.chdir(PROJECT_ROOT)
+        
+        env = os.environ.copy()
+        env['MCP_SESSION'] = 'true'
+        env['MCP_USER'] = 'claude'
+        
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "gridded-data", "list-variables"]
+        
+        stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
+        
+        os.chdir(original_cwd)
+        
+        return {
+            "success": True,
+            "output": stdout,
+            "command": " ".join(cmd)
+        }
+        
+    except Exception as e:
+        if 'original_cwd' in locals():
+            os.chdir(original_cwd)
+            
+        return {
+            "success": False,
+            "error": f"Failed to list ERA5 variables: {str(e)}"
         }
 
 

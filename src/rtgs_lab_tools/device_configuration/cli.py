@@ -9,11 +9,11 @@ from typing import Dict, Any, List
 import click
 
 from ..core.cli_utils import (
-    CLIContext, add_common_options, handle_common_errors
+    CLIContext, add_common_options, handle_common_errors, device_config_parameters
 )
 from ..core.exceptions import ValidationError, APIError
 from ..core.config import Config
-from .update_configuration import ParticleConfigUpdater, GitLogger
+from .update_configuration import ParticleConfigUpdater
 
 
 @click.group()
@@ -24,15 +24,7 @@ def device_configuration_cli(ctx):
 
 
 @device_configuration_cli.command()
-@click.option('--config', required=True, help='Path to configuration JSON file OR JSON string')
-@click.option('--devices', required=True, help='Path to device list file OR comma/space separated device IDs')
-@click.option('--output', default='update_results.json', help='Output file for results')
-@click.option('--max-retries', type=int, default=3, help='Maximum retry attempts per device')
-@click.option('--restart-wait', type=int, default=30, help='Seconds to wait for device restart')
-@click.option('--online-timeout', type=int, default=120, help='Seconds to wait for device to come online')
-@click.option('--max-concurrent', type=int, default=5, help='Maximum concurrent devices to process')
-@click.option('--dry-run', is_flag=True, help='Validate inputs without making changes')
-@click.option('--no-particle-git-log', is_flag=True, help='Disable Particle-specific git logging (CLI logging still active)')
+@device_config_parameters
 @add_common_options
 @click.pass_context
 @handle_common_errors("device-configuration")
@@ -174,24 +166,6 @@ def update_config(ctx, config, devices, output, max_retries, restart_wait, onlin
         raise
 
 
-# Main command for external use
-@click.command()
-@click.option('--config', required=True, help='Path to configuration JSON file OR JSON string')
-@click.option('--devices', required=True, help='Path to device list file OR comma/space separated device IDs')
-@click.option('--output', default='update_results.json', help='Output file for results')
-@click.option('--max-retries', type=int, default=3, help='Maximum retry attempts per device')
-@click.option('--restart-wait', type=int, default=30, help='Seconds to wait for device restart')
-@click.option('--online-timeout', type=int, default=120, help='Seconds to wait for device to come online')
-@click.option('--max-concurrent', type=int, default=5, help='Maximum concurrent devices to process')
-@click.option('--dry-run', is_flag=True, help='Validate inputs without making changes')
-@click.option('--no-particle-git-log', is_flag=True, help='Disable Particle-specific git logging')
-@add_common_options
-def device_config_command(**kwargs):
-    """Update configurations on multiple Particle devices."""
-    # Create a context and invoke the update_config command
-    ctx = click.Context(update_config)
-    ctx.obj = CLIContext()
-    ctx.invoke(update_config, **kwargs)
 
 
 if __name__ == '__main__':

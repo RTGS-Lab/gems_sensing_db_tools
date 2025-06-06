@@ -269,24 +269,6 @@ def list_variables(ctx, verbose, log_file, no_git_log, note):
         raise
 
 
-# Main command for external use
-@click.command()
-@click.option('--variables', '-v', multiple=True, required=True, help='ERA5 variables to download')
-@click.option('--start-date', required=True, help='Start date (YYYY-MM-DD)')
-@click.option('--end-date', required=True, help='End date (YYYY-MM-DD)')
-@click.option('--area', help='Bounding box as "north,west,south,east"')
-@click.option('--output-file', '-o', help='Output NetCDF file path')
-@click.option('--pressure-levels', help='Pressure levels (comma-separated)')
-@click.option('--time-hours', help='Specific hours (comma-separated, e.g., "00:00,12:00")')
-@click.option('--list-variables', is_flag=True, help='List available variables and exit')
-@click.option('--process', is_flag=True, help='Process downloaded data (basic statistics)')
-@add_common_options
-def era5_command(**kwargs):
-    """Download and process ERA5 climate data."""
-    # Create a context and invoke the era5 command
-    ctx = click.Context(era5)
-    ctx.obj = CLIContext()
-    ctx.invoke(era5, **kwargs)
 
 
 if __name__ == '__main__':

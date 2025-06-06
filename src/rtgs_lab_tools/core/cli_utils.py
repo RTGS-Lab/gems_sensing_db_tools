@@ -266,6 +266,66 @@ def parse_comma_separated_list(list_str: str, item_type: type = str, item_name: 
         raise ValidationError(f"Invalid {item_name} format: {e}")
 
 
+# Parameter decorator factories for eliminating CLI parameter duplication
+def device_config_parameters(func: Callable) -> Callable:
+    """Add device configuration parameters to a command."""
+    # Add options in reverse order due to how decorators work
+    func = click.option('--no-particle-git-log', is_flag=True, help='Disable Particle-specific git logging (CLI logging still active)')(func)
+    func = click.option('--dry-run', is_flag=True, help='Validate inputs without making changes')(func)
+    func = click.option('--max-concurrent', type=int, default=5, help='Maximum concurrent devices to process')(func)
+    func = click.option('--online-timeout', type=int, default=120, help='Seconds to wait for device to come online')(func)
+    func = click.option('--restart-wait', type=int, default=30, help='Seconds to wait for device restart')(func)
+    func = click.option('--max-retries', type=int, default=3, help='Maximum retry attempts per device')(func)
+    func = click.option('--output', default='update_results.json', help='Output file for results')(func)
+    func = click.option('--devices', required=True, help='Path to device list file OR comma/space separated device IDs')(func)
+    func = click.option('--config', required=True, help='Path to configuration JSON file OR JSON string')(func)
+    return func
+
+
+def error_analysis_parameters(func: Callable) -> Callable:
+    """Add error analysis parameters to a command."""
+    # Add options in reverse order due to how decorators work
+    func = click.option('--output-analysis', help='Save analysis results to JSON file')(func)
+    func = click.option('--output-dir', default='figures', help='Output directory for plots')(func)
+    func = click.option('--nodes', help='Comma-separated list of node IDs to analyze')(func)
+    func = click.option('--generate-graph', is_flag=True, help='Generate error frequency graphs')(func)
+    func = click.option('--error-column', default='message', help='Column containing error data')(func)
+    func = click.option('--file', '-f', required=True, help='CSV or JSON file with error data')(func)
+    return func
+
+
+def sensing_data_parameters(func: Callable) -> Callable:
+    """Add sensing data extraction parameters to a command."""
+    # Add options in reverse order due to how decorators work
+    func = click.option('--retry-count', type=int, default=3, help='Maximum retry attempts')(func)
+    func = click.option('--create-zip', is_flag=True, help='Create zip archive with metadata')(func)
+    func = click.option('--output', type=click.Choice(['csv', 'parquet']), default='csv', help='Output format')(func)
+    func = click.option('--output-dir', help='Output directory for data files (default: ./data)')(func)
+    func = click.option('--node-id', help='Comma-separated list of node IDs to query')(func)
+    func = click.option('--end-date', help='End date (YYYY-MM-DD), defaults to today')(func)
+    func = click.option('--start-date', default="2018-01-01", help='Start date (YYYY-MM-DD)')(func)
+    func = click.option('--setup-credentials', is_flag=True, help='Create template .env file')(func)
+    func = click.option('--list-projects', is_flag=True, help='List all available projects and exit')(func)
+    func = click.option('--project', '-p', help='Project name to query')(func)
+    return func
+
+
+def visualization_parameters(func: Callable) -> Callable:
+    """Add visualization parameters to a command."""
+    # Add options in reverse order due to how decorators work
+    func = click.option('--no-markers', is_flag=True, help='Disable data point markers')(func)
+    func = click.option('--title', help='Plot title')(func)
+    func = click.option('--list-params', is_flag=True, help='List available parameters and exit')(func)
+    func = click.option('--format', 'output_format', type=click.Choice(['png', 'pdf', 'svg']), default='png', help='Output format')(func)
+    func = click.option('--output-file', help='Output filename (without extension)')(func)
+    func = click.option('--output-dir', default='figures', help='Output directory for plots')(func)
+    func = click.option('--multi-param', multiple=True, help='Multiple parameters as "node_id,parameter_path"')(func)
+    func = click.option('--node-id', help='Specific node ID to plot')(func)
+    func = click.option('--parameter', '-p', help='Parameter path to plot (e.g., "Data.Devices.0.Temperature")')(func)
+    func = click.option('--file', '-f', required=True, help='CSV file with sensor data')(func)
+    return func
+
+
 # Context class for passing data between CLI commands
 class CLIContext:
     """Context object for sharing data between CLI commands."""

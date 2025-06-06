@@ -108,6 +108,150 @@ def check_project_exists(
     return False, []
 
 
+def extract_data(
+    project: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    node_ids: Optional[List[str]] = None,
+    output_dir: Optional[str] = None,
+    output_format: str = 'csv',
+    create_zip: bool = False,
+    retry_count: int = 3,
+    note: Optional[str] = None
+) -> dict:
+    """High-level data extraction function that orchestrates the entire workflow.
+    
+    Args:
+        project: Project name to query
+        start_date: Start date string (YYYY-MM-DD). Defaults to 2018-01-01
+        end_date: End date string (YYYY-MM-DD). Defaults to today
+        node_ids: Optional list of specific node IDs to query
+        output_dir: Output directory for data files (default: ./data)
+        output_format: Output format ('csv' or 'parquet')
+        create_zip: Create zip archive with metadata
+        retry_count: Maximum retry attempts
+        note: Optional note for git logging
+        
+    Returns:
+        Dictionary with extraction results including file paths and metadata
+        
+    Raises:
+        ValidationError: If parameters are invalid
+        DatabaseError: If database operations fail
+    """
+    from ..core import Config, DatabaseManager
+    from ..core.exceptions import DatabaseError, ValidationError
+    from ..core.cli_utils import validate_date_format, parse_node_ids
+    from .file_operations import ensure_data_directory, save_data, create_zip_archive
+    from datetime import datetime
+    
+    # Validate and normalize dates
+    if start_date is None:
+        start_date = "2018-01-01"
+    if end_date is None:
+        end_date = datetime.now().strftime("%Y-%m-%d")
+    
+    validate_date_format(start_date, "start-date")
+    validate_date_format(end_date, "end-date")
+    
+    # Parse node IDs if provided as string
+    if isinstance(node_ids, str):
+        node_ids = parse_node_ids(node_ids)
+    
+    # Initialize database connection
+    config = Config()
+    db_manager = DatabaseManager(config)
+    
+    if not db_manager.test_connection():
+        raise DatabaseError("Failed to connect to database. Please check your configuration and VPN connection.")
+    
+    try:
+        # Extract raw data
+        logger.info(f"Extracting data for project: {project}")
+        df = get_raw_data(
+            database_manager=db_manager,
+            project=project,
+            start_date=start_date,
+            end_date=end_date,
+            node_ids=node_ids,
+            max_retries=retry_count
+        )
+        
+        if df.empty:
+            logger.info("No data found for the specified parameters")
+            return {
+                'success': True,
+                'records_extracted': 0,
+                'output_file': None,
+                'zip_file': None,
+                'message': 'No data found for the specified parameters'
+            }
+        
+        # Ensure output directory
+        output_directory = ensure_data_directory(output_dir)
+        
+        # Generate filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{project.replace(' ', '_')}_{start_date}_to_{end_date}_{timestamp}"
+        
+        # Save data
+        file_path = save_data(df, output_directory, filename, output_format)
+        
+        # Create zip archive if requested
+        zip_path = None
+        if create_zip:
+            zip_path = create_zip_archive(file_path, df, output_format)
+        
+        results = {
+            'success': True,
+            'records_extracted': len(df),
+            'output_file': str(file_path),
+            'zip_file': str(zip_path) if zip_path else None,
+            'project': project,
+            'start_date': start_date,
+            'end_date': end_date,
+            'node_ids': node_ids,
+            'output_format': output_format,
+            'output_directory': str(output_directory),
+            'create_zip': create_zip,
+            'retry_count': retry_count,
+            'note': note
+        }
+        
+        logger.info(f"Successfully extracted {len(df)} records to {file_path}")
+        return results
+        
+    finally:
+        db_manager.close()
+
+
+def list_available_projects(max_retries: int = 3) -> List[Tuple[str, int]]:
+    """List all available projects in the database.
+    
+    Args:
+        max_retries: Maximum number of retry attempts
+        
+    Returns:
+        List of tuples containing (project_name, node_count)
+        
+    Raises:
+        DatabaseError: If database operations fail
+    """
+    from ..core import Config, DatabaseManager
+    from ..core.exceptions import DatabaseError
+    
+    config = Config()
+    db_manager = DatabaseManager(config)
+    
+    if not db_manager.test_connection():
+        raise DatabaseError("Failed to connect to database. Please check your configuration and VPN connection.")
+    
+    try:
+        return list_projects(db_manager, max_retries)
+    finally:
+        db_manager.close()
+
+
 def get_raw_data(
     database_manager: DatabaseManager,
     project: str,

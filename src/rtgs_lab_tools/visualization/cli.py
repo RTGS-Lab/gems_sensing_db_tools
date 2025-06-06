@@ -8,7 +8,7 @@ import click
 import pandas as pd
 
 from ..core.cli_utils import (
-    CLIContext, add_common_options, handle_common_errors
+    CLIContext, add_common_options, handle_common_errors, visualization_parameters
 )
 from ..visualization import (
     create_time_series_plot, 
@@ -26,16 +26,7 @@ def visualization_cli(ctx):
 
 
 @visualization_cli.command()
-@click.option('--file', '-f', required=True, help='CSV file with sensor data')
-@click.option('--parameter', '-p', help='Parameter path to plot (e.g., "Data.Devices.0.Temperature")')
-@click.option('--node-id', help='Specific node ID to plot')
-@click.option('--multi-param', multiple=True, help='Multiple parameters as "node_id,parameter_path"')
-@click.option('--output-dir', default='figures', help='Output directory for plots')
-@click.option('--output-file', help='Output filename (without extension)')
-@click.option('--format', 'output_format', type=click.Choice(['png', 'pdf', 'svg']), default='png', help='Output format')
-@click.option('--list-params', is_flag=True, help='List available parameters and exit')
-@click.option('--title', help='Plot title')
-@click.option('--no-markers', is_flag=True, help='Disable data point markers')
+@visualization_parameters
 @add_common_options
 @click.pass_context
 @handle_common_errors("visualization")
@@ -200,25 +191,6 @@ def list_parameters(ctx, file, verbose, log_file, no_git_log, note):
         raise
 
 
-# Main command for external use
-@click.command()
-@click.option('--file', '-f', required=True, help='CSV file with sensor data')
-@click.option('--parameter', '-p', help='Parameter path to plot (e.g., "Data.Devices.0.Temperature")')
-@click.option('--node-id', help='Specific node ID to plot')
-@click.option('--multi-param', multiple=True, help='Multiple parameters as "node_id,parameter_path"')
-@click.option('--output-dir', default='figures', help='Output directory for plots')
-@click.option('--output-file', help='Output filename (without extension)')
-@click.option('--format', 'output_format', type=click.Choice(['png', 'pdf', 'svg']), default='png', help='Output format')
-@click.option('--list-params', is_flag=True, help='List available parameters and exit')
-@click.option('--title', help='Plot title')
-@click.option('--no-markers', is_flag=True, help='Disable data point markers')
-@add_common_options
-def visualize_command(**kwargs):
-    """Create visualizations from sensor data."""
-    # Create a context and invoke the create command
-    ctx = click.Context(create)
-    ctx.obj = CLIContext()
-    ctx.invoke(create, **kwargs)
 
 
 if __name__ == '__main__':

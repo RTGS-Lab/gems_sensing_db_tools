@@ -4,15 +4,50 @@ __version__ = "0.1.0"
 __author__ = "RTGS Lab"
 __email__ = "rtgs@umn.edu"
 
+# Core infrastructure
 from .core import DatabaseManager, Config
-from .sensing_data import get_raw_data, list_projects
-from .visualization import create_time_series_plot, plot_sensor_data
+from .core.git_logger import GitLogger
+from .core.exceptions import ValidationError, DatabaseError, APIError
+
+# High-level data extraction functions
+from .sensing_data import extract_data, list_available_projects, get_raw_data
+
+# Visualization functions
+from .visualization import create_time_series_plot, create_multi_parameter_plot, parse_sensor_messages
+
+# Device management
+from .device_configuration import ParticleConfigUpdater, ParticleClient
+from .device_monitoring import ErrorCodeParser
+
+# Climate data
+from .gridded_data import ERA5Client, download_era5_data, process_era5_data
 
 __all__ = [
+    # Core
     "DatabaseManager",
     "Config", 
+    "GitLogger",
+    "ValidationError",
+    "DatabaseError", 
+    "APIError",
+    
+    # Data extraction
+    "extract_data",
+    "list_available_projects",
     "get_raw_data",
-    "list_projects",
+    
+    # Visualization
     "create_time_series_plot",
-    "plot_sensor_data",
+    "create_multi_parameter_plot", 
+    "parse_sensor_messages",
+    
+    # Device management
+    "ParticleConfigUpdater",
+    "ParticleClient",
+    "ErrorCodeParser",
+    
+    # Climate data
+    "ERA5Client",
+    "download_era5_data",
+    "process_era5_data",
 ]

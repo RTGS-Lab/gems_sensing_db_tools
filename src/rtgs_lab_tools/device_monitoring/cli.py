@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from ..core.cli_utils import (
-    CLIContext, add_common_options, handle_common_errors
+    CLIContext, add_common_options, handle_common_errors, error_analysis_parameters
 )
 
 
@@ -20,12 +20,7 @@ def error_analysis_cli(ctx):
 
 
 @error_analysis_cli.command()
-@click.option('--file', '-f', required=True, help='CSV or JSON file with error data')
-@click.option('--error-column', default='message', help='Column containing error data')
-@click.option('--generate-graph', is_flag=True, help='Generate error frequency graphs')
-@click.option('--nodes', help='Comma-separated list of node IDs to analyze')
-@click.option('--output-dir', default='figures', help='Output directory for plots')
-@click.option('--output-analysis', help='Save analysis results to JSON file')
+@error_analysis_parameters
 @add_common_options
 @click.pass_context
 @handle_common_errors("error-analysis")
@@ -37,17 +32,20 @@ def analyze(ctx, file, error_column, generate_graph, nodes, output_dir,
     
     try:
         from ..device_monitoring import ErrorCodeParser, parse_error_codes, analyze_error_patterns
-        from ..device_monitoring.cli import load_data_file, filter_by_nodes, create_error_frequency_plot, setup_output_directory
+        from ..device_monitoring.error_parser import (
+            load_data_file, filter_by_nodes, create_error_frequency_plot, 
+            setup_output_directory, display_enhanced_error_analysis
+        )
         
         # Load data
         cli_ctx.logger.info(f"Loading data from {file}")
         df = load_data_file(file)
         cli_ctx.logger.info(f"Loaded {len(df)} records")
         
-        # Parse node filter
-        node_filter = []
-        if nodes:
-            node_filter = [n.strip() for n in nodes.split(',')]
+        # Parse node filter - default to "all" if not specified
+        if nodes is None:
+            nodes = "all"
+        node_filter = [n.strip() for n in nodes.split(',')]
         
         # Filter by nodes if specified
         if node_filter and 'all' not in node_filter:
@@ -68,30 +66,8 @@ def analyze(ctx, file, error_column, generate_graph, nodes, output_dir,
         # Analyze error patterns
         analysis = analyze_error_patterns(parsed_errors_df)
         
-        # Print summary
-        click.echo(f"\n=== ERROR ANALYSIS SUMMARY ===")
-        click.echo(f"Total Errors: {analysis['total_errors']}")
-        click.echo(f"Unique Error Codes: {analysis['unique_error_codes']}")
-        click.echo(f"Date Range: {analysis['date_range']['start']} to {analysis['date_range']['end']}")
-        
-        # Print top error codes
-        click.echo(f"\n=== TOP ERROR CODES ===")
-        for i, error_info in enumerate(analysis['top_error_codes'], 1):
-            click.echo(f"{i}. {error_info['code']} ({error_info['count']}): {error_info['description']}")
-        
-        # Print errors by device
-        if 'errors_by_device' in analysis:
-            click.echo(f"\n=== ERRORS BY DEVICE ===")
-            for device, count in analysis['errors_by_device'].items():
-                click.echo(f"  {device}: {count}")
-        
-        # Print errors by node
-        if 'errors_by_node' in analysis:
-            click.echo(f"\n=== ERRORS BY NODE ===")
-            for node, count in list(analysis['errors_by_node'].items())[:10]:
-                click.echo(f"  {node}: {count}")
-            if len(analysis['errors_by_node']) > 10:
-                click.echo(f"  ... and {len(analysis['errors_by_node']) - 10} more nodes")
+        # Enhanced error analysis display
+        display_enhanced_error_analysis(parsed_errors_df, analysis, node_filter)
         
         # Generate plots if requested
         output_dir_path = setup_output_directory(output_dir)
@@ -222,21 +198,6 @@ def error_classes(ctx):
         click.echo(f"  {code}: {name}")
 
 
-# Main command for external use
-@click.command()
-@click.option('--file', '-f', required=True, help='CSV or JSON file with error data')
-@click.option('--error-column', default='message', help='Column containing error data')
-@click.option('--generate-graph', is_flag=True, help='Generate error frequency graphs')
-@click.option('--nodes', help='Comma-separated list of node IDs to analyze')
-@click.option('--output-dir', default='figures', help='Output directory for plots')
-@click.option('--output-analysis', help='Save analysis results to JSON file')
-@add_common_options
-def analyze_errors_command(**kwargs):
-    """Analyze error codes from GEMS sensor data files."""
-    # Create a context and invoke the analyze command
-    ctx = click.Context(analyze)
-    ctx.obj = CLIContext()
-    ctx.invoke(analyze, **kwargs)
 
 
 if __name__ == '__main__':
