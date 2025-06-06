@@ -422,7 +422,7 @@ class ParticleConfigUpdater:
         end_time = datetime.fromisoformat(results['summary']['end_time'])
         total_duration = (end_time - start_time).total_seconds()
         
-        logger.info(f"📊 Parallel configuration update completed in {total_duration:.1f} seconds:")
+        logger.info(f"  Parallel configuration update completed in {total_duration:.1f} seconds:")
         logger.info(f"  Total devices: {results['summary']['total_devices']}")
         logger.info(f"  Successful: {results['summary']['successful']}")
         logger.info(f"  Failed: {results['summary']['failed']}")
