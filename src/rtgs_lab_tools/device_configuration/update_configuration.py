@@ -22,74 +22,6 @@ from ..core.config import Config
 logger = logging.getLogger(__name__)
 
 
-# Legacy GitLogger class - kept for backward compatibility with original script
-# New CLI uses the core GitLogger from rtgs_lab_tools.core.git_logger
-class GitLogger(CoreGitLogger):
-    """Legacy GitLogger wrapper for backward compatibility."""
-    
-    def __init__(self, repo_path: str = None):
-        super().__init__(tool_name="configuration-update")
-    
-    def create_execution_log(self, results: Dict[str, Any], config: Dict[str, Any], 
-                           device_ids: List[str], args) -> str:
-        """Create a detailed execution log using the legacy format."""
-        # Convert to the format expected by the core GitLogger
-        operation = f"Update configuration on {len(device_ids)} devices"
-        if hasattr(args, 'note') and args.note:
-            operation += f" - {args.note}"
-        
-        parameters = {
-            'config_source': getattr(args, 'config', 'N/A'),
-            'device_source': getattr(args, 'devices', 'N/A'),
-            'total_devices': len(device_ids),
-            'max_retries': getattr(args, 'max_retries', 3),
-            'restart_wait': getattr(args, 'restart_wait', 30),
-            'online_timeout': getattr(args, 'online_timeout', 120),
-            'max_concurrent': getattr(args, 'max_concurrent', 5),
-            'dry_run': getattr(args, 'dry_run', False),
-            'note': getattr(args, 'note', '')
-        }
-        
-        cli_results = {
-            'success': results['summary']['failed'] == 0,
-            'total_devices': results['summary']['total_devices'],
-            'successful_updates': results['summary']['successful'],
-            'failed_updates': results['summary']['failed'],
-            'success_rate': (results['summary']['successful'] / results['summary']['total_devices'] * 100),
-            'expected_system_uid': results['summary'].get('expected_system_uid'),
-            'expected_sensor_uid': results['summary'].get('expected_sensor_uid'),
-            'start_time': results['summary']['start_time'],
-            'end_time': results['summary']['end_time']
-        }
-        
-        # Create device summary
-        device_summary = ""
-        for device_result in results['device_results']:
-            status = "✅" if device_result['success'] else "❌"
-            device_summary += f"- {status} `{device_result['device_id']}` - "
-            if device_result['success']:
-                device_summary += f"Success (System UID: {device_result.get('system_uid', 'N/A')}, Sensor UID: {device_result.get('sensor_uid', 'N/A')})\\n"
-            else:
-                device_summary += f"Failed: {device_result.get('error', 'Unknown error')}\\n"
-        
-        additional_sections = {
-            "Update Summary": f"- **Successful**: {results['summary']['successful']}/{results['summary']['total_devices']} devices\\n- **Success Rate**: {cli_results['success_rate']:.1f}%\\n- **Expected System UID**: {results['summary'].get('expected_system_uid', 'N/A')}\\n- **Expected Sensor UID**: {results['summary'].get('expected_sensor_uid', 'N/A')}",
-            "Device Results": device_summary,
-            "Configuration Applied": f"```json\\n{json.dumps(config, indent=2)}\\n```"
-        }
-        
-        return self.log_execution(
-            operation=operation,
-            parameters=parameters,
-            results=cli_results,
-            script_path=__file__,
-            additional_sections=additional_sections
-        )
-    
-    def commit_and_push_log(self, log_path: str, results: Dict[str, Any]) -> bool:
-        """Commit and push the log file (handled automatically by core GitLogger)."""
-        # The core GitLogger handles this automatically, so just return True
-        return True
 
 
 class ParticleConfigUpdater:
@@ -114,7 +46,7 @@ class ParticleConfigUpdater:
         
         # Git logging
         self.enable_git_logging = enable_git_logging
-        self.git_logger = GitLogger(repo_path) if enable_git_logging else None
+        self.git_logger = CoreGitLogger(tool_name="device-configuration", repo_path=repo_path) if enable_git_logging else None
     
     def get_configuration_uids(self, device_id: str, session: Optional[requests.Session] = None) -> Tuple[Optional[int], Optional[int], bool]:
         """Get the current configuration UIDs from the device."""
@@ -433,11 +365,59 @@ class ParticleConfigUpdater:
         # Create and commit git log if enabled
         if self.enable_git_logging and self.git_logger and args:
             try:
-                log_path = self.git_logger.create_execution_log(results, config, device_ids, args)
-                if self.git_logger.commit_and_push_log(log_path, results):
-                    logger.info("✅ Execution log committed to repository")
-                else:
-                    logger.warning("⚠️ Failed to commit execution log to repository")
+                # Convert to the format expected by the core GitLogger
+                operation = f"Update configuration on {len(device_ids)} devices"
+                if hasattr(args, 'note') and args.note:
+                    operation += f" - {args.note}"
+                
+                parameters = {
+                    'config_source': getattr(args, 'config', 'N/A'),
+                    'device_source': getattr(args, 'devices', 'N/A'),
+                    'total_devices': len(device_ids),
+                    'max_retries': getattr(args, 'max_retries', 3),
+                    'restart_wait': getattr(args, 'restart_wait', 30),
+                    'online_timeout': getattr(args, 'online_timeout', 120),
+                    'max_concurrent': getattr(args, 'max_concurrent', 5),
+                    'dry_run': getattr(args, 'dry_run', False),
+                    'note': getattr(args, 'note', '')
+                }
+                
+                cli_results = {
+                    'success': results['summary']['failed'] == 0,
+                    'total_devices': results['summary']['total_devices'],
+                    'successful_updates': results['summary']['successful'],
+                    'failed_updates': results['summary']['failed'],
+                    'success_rate': (results['summary']['successful'] / results['summary']['total_devices'] * 100),
+                    'expected_system_uid': results['summary'].get('expected_system_uid'),
+                    'expected_sensor_uid': results['summary'].get('expected_sensor_uid'),
+                    'start_time': results['summary']['start_time'],
+                    'end_time': results['summary']['end_time']
+                }
+                
+                # Create device summary
+                device_summary = ""
+                for device_result in results['device_results']:
+                    status = "✅" if device_result['success'] else "❌"
+                    device_summary += f"- {status} `{device_result['device_id']}` - "
+                    if device_result['success']:
+                        device_summary += f"Success (System UID: {device_result.get('system_uid', 'N/A')}, Sensor UID: {device_result.get('sensor_uid', 'N/A')})\\n"
+                    else:
+                        device_summary += f"Failed: {device_result.get('error', 'Unknown error')}\\n"
+                
+                additional_sections = {
+                    "Update Summary": f"- **Successful**: {results['summary']['successful']}/{results['summary']['total_devices']} devices\\n- **Success Rate**: {cli_results['success_rate']:.1f}%\\n- **Expected System UID**: {results['summary'].get('expected_system_uid', 'N/A')}\\n- **Expected Sensor UID**: {results['summary'].get('expected_sensor_uid', 'N/A')}",
+                    "Device Results": device_summary,
+                    "Configuration Applied": f"```json\\n{json.dumps(config, indent=2)}\\n```"
+                }
+                
+                log_path = self.git_logger.log_execution(
+                    operation=operation,
+                    parameters=parameters,
+                    results=cli_results,
+                    script_path=__file__,
+                    additional_sections=additional_sections
+                )
+                logger.info("✅ Execution log committed to repository")
             except Exception as e:
                 logger.error(f"Failed to create/commit git log: {e}")
         
