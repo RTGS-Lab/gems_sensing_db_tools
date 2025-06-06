@@ -31,8 +31,8 @@ def analyze(ctx, file, error_column, generate_graph, nodes, output_dir,
     cli_ctx.setup("error-analysis", verbose, log_file, no_git_log)
     
     try:
-        from ..device_monitoring import ErrorCodeParser, parse_error_codes, analyze_error_patterns
-        from ..device_monitoring.error_parser import (
+        from ..error_analysis import ErrorCodeParser, parse_error_codes, analyze_error_patterns
+        from ..error_analysis.error_parser import (
             load_data_file, filter_by_nodes, create_error_frequency_plot, 
             setup_output_directory, display_enhanced_error_analysis
         )
@@ -162,7 +162,7 @@ def decode(ctx, error_code, verbose, log_file, no_git_log, note):
     cli_ctx.setup("error-decoding", verbose, log_file, no_git_log)
     
     try:
-        from ..device_monitoring import ErrorCodeParser
+        from ..error_analysis import ErrorCodeParser
         
         parser = ErrorCodeParser()
         parsed = parser.parse_error_code(error_code)
@@ -183,7 +183,7 @@ def decode(ctx, error_code, verbose, log_file, no_git_log, note):
 @click.pass_context
 def error_classes(ctx):
     """List all available error classes and hardware types."""
-    from ..device_monitoring.error_parser import ERROR_CLASSES, HARDWARE_DEVICES, HARDWARE_SUB_DEVICES
+    from ..error_analysis.error_parser import ERROR_CLASSES, HARDWARE_DEVICES, HARDWARE_SUB_DEVICES
     
     click.echo("=== ERROR CLASSES ===")
     for code, name in ERROR_CLASSES.items():

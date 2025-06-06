@@ -18,14 +18,14 @@ def register_commands():
     from .visualization.cli import visualization_cli
     from .gridded_data.cli import gridded_data_cli
     from .device_configuration.cli import device_configuration_cli
-    from .device_monitoring.cli import error_analysis_cli
+    from .error_analysis.cli import error_analysis_cli
     
     # Add them to the main CLI with their specific names
     cli.add_command(sensing_data_cli, name='sensing-data')
     cli.add_command(visualization_cli, name='visualization')
     cli.add_command(gridded_data_cli, name='gridded-data')
     cli.add_command(device_configuration_cli, name='device-configuration')
-    cli.add_command(error_analysis_cli, name='device-monitoring')
+    cli.add_command(error_analysis_cli, name='error-analysis')
 
 
 # Register commands when the module is imported

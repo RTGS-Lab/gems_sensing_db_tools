@@ -328,8 +328,8 @@ async def visualization_list_parameters(file_path: str) -> Dict[str, Any]:
 # ERROR ANALYSIS TOOLS
 # -----------------
 
-@mcp.tool("device_monitoring_analyze")
-async def device_monitoring_analyze(
+@mcp.tool("error_analysis_analyze")
+async def error_analysis_analyze(
     file_path: str,
     generate_graph: bool = False,
     node_filter: Optional[str] = None,
@@ -357,7 +357,7 @@ async def device_monitoring_analyze(
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "device-monitoring", "analyze", "--file", file_path, "--error-column", error_column]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "error-analysis", "analyze", "--file", file_path, "--error-column", error_column]
         
         if generate_graph:
             cmd.append("--generate-graph")
@@ -394,8 +394,8 @@ async def device_monitoring_analyze(
         }
 
 
-@mcp.tool("device_monitoring_decode")
-async def device_monitoring_decode(error_code: str) -> Dict[str, Any]:
+@mcp.tool("error_analysis_decode")
+async def error_analysis_decode(error_code: str) -> Dict[str, Any]:
     """
     Decode a single GEMS device error code.
     
@@ -410,7 +410,7 @@ async def device_monitoring_decode(error_code: str) -> Dict[str, Any]:
         env['MCP_SESSION'] = 'true'
         env['MCP_USER'] = 'claude'
         
-        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "device-monitoring", "decode", error_code]
+        cmd = [PYTHON_EXECUTABLE, "-m", "rtgs_lab_tools.cli", "error-analysis", "decode", error_code]
         
         stdout, stderr = await run_command_with_env(cmd, env, cwd=PROJECT_ROOT)
         

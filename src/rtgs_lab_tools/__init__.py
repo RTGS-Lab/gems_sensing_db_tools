@@ -17,7 +17,9 @@ from .visualization import create_time_series_plot, create_multi_parameter_plot,
 
 # Device management
 from .device_configuration import ParticleConfigUpdater, ParticleClient
-from .device_monitoring import ErrorCodeParser
+
+# Error analysis
+from .error_analysis import ErrorCodeParser
 
 # Climate data
 from .gridded_data import ERA5Client, download_era5_data, process_era5_data
