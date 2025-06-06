@@ -47,12 +47,13 @@ class GitLogger:
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         logger.debug(f"Ensured logs directory exists: {self.logs_dir}")
         
-    def _run_git_command(self, command: List[str], cwd: Optional[str] = None) -> Tuple[bool, str]:
+    def _run_git_command(self, command: List[str], cwd: Optional[str] = None, input_text: str = None) -> Tuple[bool, str]:
         """Run a git command and return success status and output.
         
         Args:
             command: Git command as list of strings
             cwd: Working directory for command
+            input_text: Optional input to pass to the command
             
         Returns:
             Tuple of (success, output)
@@ -63,6 +64,7 @@ class GitLogger:
                 cwd=cwd or self.repo_path,
                 capture_output=True,
                 text=True,
+                input=input_text,
                 timeout=30
             )
             return result.returncode == 0, result.stdout + result.stderr
@@ -240,125 +242,99 @@ class GitLogger:
             return "Unknown"
     
     def commit_and_push_log(self, log_path: str, operation: str, results: Dict[str, Any]) -> bool:
-        """Commit and optionally push the log file to the logging branch.
+        """Commit and push the log file directly to the logs branch without checkout.
         
-        This method switches to a dedicated 'logging' branch, commits the log file,
-        and then returns to the original branch to prevent log pollution in feature branches.
+        This method uses git worktree to commit directly to the logs branch
+        without affecting the current working directory or branch state.
         
         Args:
             log_path: Path to the log file
             operation: Description of the operation
-            results: Results dictionary for commit message
+            results: Results dictionary from the operation
             
         Returns:
-            True if commit successful, False otherwise
+            True if successful, False otherwise
         """
-        context = self.get_execution_context()
-        original_branch = None
-        
         try:
-            # Check if we're in a git repository
+            # Ensure we're in a git repository
             success, _ = self._run_git_command(['git', 'status'])
             if not success:
-                logger.warning("Not in a git repository or git not available")
+                logger.warning("Not in a git repository, skipping log commit")
+                return False
+                
+            # Ensure the log file exists
+            if not os.path.exists(log_path):
+                logger.error(f"Log file does not exist: {log_path}")
                 return False
             
-            # Get current branch name
-            success, current_branch_output = self._run_git_command(['git', 'branch', '--show-current'])
-            if success:
-                original_branch = current_branch_output.strip()
-                logger.debug(f"Current branch: {original_branch}")
-            else:
-                logger.warning("Could not determine current branch, proceeding without branch switching")
-                original_branch = None
+            # Create commit message with emoji based on success
+            status_emoji = "✅" if results.get('success', False) else "❌"
+            execution_source = self._get_execution_source()
+            triggered_by = self._get_triggered_by()
             
-            # Switch to logging branch (create if it doesn't exist)
-            if original_branch:
-                # Check if logging branch exists
-                success, _ = self._run_git_command(['git', 'show-ref', '--verify', '--quiet', 'refs/heads/logging'])
+            commit_message = f"{self.tool_name} log: {operation} {status_emoji} - {execution_source} by {triggered_by}"
+            
+            # Check if logs branch exists on remote and fetch it
+            success, _ = self._run_git_command(['git', 'ls-remote', '--heads', 'origin', 'logs'])
+            if success:
+                # Fetch the remote logs branch
+                self._run_git_command(['git', 'fetch', 'origin', 'logs:logs'])
+            
+            # Use a temporary worktree to commit to logs branch
+            import tempfile
+            import shutil
+            
+            with tempfile.TemporaryDirectory() as temp_dir:
+                worktree_path = os.path.join(temp_dir, 'logs_worktree')
+                
+                # Create worktree for logs branch
+                success, output = self._run_git_command(['git', 'worktree', 'add', worktree_path, 'logs'])
                 if not success:
-                    # Create logging branch from master/main
-                    success, _ = self._run_git_command(['git', 'checkout', '-b', 'logging', 'master'])
+                    logger.warning(f"Failed to create worktree: {output}, committing to current branch")
+                    # Fallback: just add and commit to current branch
+                    success, _ = self._run_git_command(['git', 'add', log_path])
+                    if success:
+                        success, _ = self._run_git_command(['git', 'commit', '-m', commit_message])
+                        if success:
+                            self._run_git_command(['git', 'push'])
+                    return success
+                
+                try:
+                    # Copy log file to worktree
+                    log_relative_path = os.path.relpath(log_path, self.repo_path)
+                    target_path = os.path.join(worktree_path, log_relative_path)
+                    
+                    # Ensure target directory exists
+                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                    shutil.copy2(log_path, target_path)
+                    
+                    # Add and commit in worktree
+                    success, output = self._run_git_command(['git', 'add', log_relative_path], cwd=worktree_path)
                     if not success:
-                        # Try main branch if master doesn't exist
-                        success, _ = self._run_git_command(['git', 'checkout', '-b', 'logging', 'main'])
-                        if not success:
-                            logger.warning("Could not create logging branch, committing to current branch")
-                            original_branch = None
-                        else:
-                            logger.info("Created logging branch from main")
-                    else:
-                        logger.info("Created logging branch from master")
-                else:
-                    # Switch to existing logging branch
-                    success, output = self._run_git_command(['git', 'checkout', 'logging'])
+                        logger.error(f"Failed to add log file in worktree: {output}")
+                        return False
+                    
+                    success, output = self._run_git_command(['git', 'commit', '-m', commit_message], cwd=worktree_path)
                     if not success:
-                        logger.warning(f"Could not switch to logging branch: {output}, committing to current branch")
-                        original_branch = None
+                        logger.error(f"Failed to commit in worktree: {output}")
+                        return False
+                    
+                    # Push from worktree
+                    success, output = self._run_git_command(['git', 'push', 'origin', 'logs'], cwd=worktree_path)
+                    if success:
+                        logger.info(f"Successfully committed and pushed log: {commit_message}")
+                        return True
                     else:
-                        logger.debug("Switched to logging branch")
-            
-            # Add the log file
-            success, output = self._run_git_command(['git', 'add', log_path])
-            if not success:
-                logger.error(f"Failed to add log file to git: {output}")
-                # Try to return to original branch before failing
-                if original_branch:
-                    self._run_git_command(['git', 'checkout', original_branch])
-                return False
-            
-            # Check if there are changes to commit
-            success, output = self._run_git_command(['git', 'diff', '--staged', '--quiet'])
-            if success:  # No changes staged
-                logger.info("No changes to commit (log file already exists)")
-                # Return to original branch
-                if original_branch:
-                    self._run_git_command(['git', 'checkout', original_branch])
-                return True
-            
-            # Create commit message
-            status = "✅" if results.get('success', True) else "❌"
-            commit_message = (
-                f"{self.tool_name} log: {operation} {status} - "
-                f"{context['execution_source']} by {context['triggered_by']}"
-            )
-            
-            # Commit the changes
-            success, output = self._run_git_command(['git', 'commit', '-m', commit_message])
-            if not success:
-                logger.error(f"Failed to commit log file: {output}")
-                # Try to return to original branch before failing
-                if original_branch:
-                    self._run_git_command(['git', 'checkout', original_branch])
-                return False
-            
-            logger.info(f"Committed log file to logging branch with message: {commit_message}")
-            
-            # Try to push the logging branch (this might fail in some environments, which is ok)
-            success, output = self._run_git_command(['git', 'push', 'origin', 'logging'])
-            if success:
-                logger.info("Successfully pushed logging branch to remote repository")
-            else:
-                logger.debug(f"Failed to push logging branch (this is normal in some environments): {output}")
-            
-            # Return to original branch
-            if original_branch:
-                success, output = self._run_git_command(['git', 'checkout', original_branch])
-                if success:
-                    logger.debug(f"Returned to original branch: {original_branch}")
-                else:
-                    logger.warning(f"Failed to return to original branch {original_branch}: {output}")
-            
-            return True
-            
+                        logger.warning(f"Failed to push logs branch: {output}")
+                        logger.info(f"Successfully committed log locally: {commit_message}")
+                        return True
+                        
+                finally:
+                    # Clean up worktree
+                    self._run_git_command(['git', 'worktree', 'remove', worktree_path])
+                
         except Exception as e:
             logger.error(f"Failed to commit/push log: {e}")
-            # Try to return to original branch in case of error
-            if original_branch:
-                try:
-                    self._run_git_command(['git', 'checkout', original_branch])
-                except:
-                    pass  # Best effort to return
             return False
     
     def log_execution(

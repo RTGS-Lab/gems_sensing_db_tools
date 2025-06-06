@@ -34,11 +34,11 @@ RTGS Lab Tools consolidates multiple environmental data analysis workflows into 
 - **Configuration Templates**: Pre-defined settings for different sensor types
 - **Audit Trails**: Comprehensive logging of all device operations
 
-### Device Monitoring
-- **Error Code Parsing**: Decode and analyze hex error codes from GEMS devices
+### Error Analysis
+- **Error Code Parsing**: Decode and analyze hex error codes from GEMS devices using ERRORCODES.md database
 - **Pattern Recognition**: Identify common errors and temporal trends
 - **Visualization**: Generate frequency plots and statistical summaries
-- **Device Diagnostics**: Track errors by node and hardware component
+- **Device Diagnostics**: Track errors by node and hardware component with full error translations
 
 ### Packet Parser
 - **Universal**: Packet parser for parsing new and historical JSON packets from in field devices
@@ -50,7 +50,8 @@ RTGS Lab Tools consolidates multiple environmental data analysis workflows into 
 - **Git Integration**: Automatic commit and tracking of all tool executions
 
 ### Universal Logging
-- **Automatic Logging**: Automatically creates logs and uploads them to github for auditing purposes and tool use analysis
+- **Automatic Logging**: Automatically creates logs and commits them to dedicated `logs` branch for auditing purposes and tool use analysis
+- **Orphan Branch**: Logs are stored in a separate orphan branch to keep the main codebase clean
 
 ## Installation
 
@@ -154,14 +155,20 @@ rtgs era5 --list-variables
 
 ### Error Analysis
 ```bash
-# Basic error analysis
-rtgs analyze-errors data.csv --generate-graph
+# Basic error analysis (shows all nodes by default)
+rtgs error-analysis analyze --file data.csv --generate-graph
 
 # Filter by specific nodes
-rtgs analyze-errors data.csv --nodes "node001,node002" --generate-graph
+rtgs error-analysis analyze --file data.csv --nodes "node001,node002" --generate-graph
+
+# Decode a single error code
+rtgs error-analysis decode 0xF00C00F8
+
+# List error classes and hardware types
+rtgs error-analysis error-classes
 
 # Save analysis results
-rtgs analyze-errors data.csv --output-analysis error_report.json
+rtgs error-analysis analyze --file data.csv --output-analysis error_report.json
 ```
 
 ## Natural Language Interface (MCP)
@@ -270,8 +277,9 @@ src/rtgs_lab_tools/
 ├── sensing_data/           # GEMS database extraction tools
 ├── gridded_data/           # Climate data access (ERA5, etc.)
 ├── visualization/          # Time series and spatial plotting
-├── device_management/      # Particle IoT device tools
-├── diagnostics/            # Error analysis and device health
+├── device_configuration/   # Particle IoT device configuration tools
+├── device_monitoring/      # Reserved for future device monitoring tools
+├── error_analysis/         # Error code analysis and device diagnostics
 └── mcp_server/            # Natural language interface
 ```
 
