@@ -1,0 +1,79 @@
+# Data-Parser Execution Log
+
+## Execution Context
+- **Timestamp**: 2025-06-13T16:18:09.178151
+- **Operation**: Parse GEMS data (all packets)
+- **Execution Source**: Manual/Local
+- **Triggered By**: zach@zach-Z390-AORUS-PRO-WIFI
+- **Hostname**: zach-Z390-AORUS-PRO-WIFI
+- **Platform**: Linux-6.11.0-25-generic-x86_64-with-glibc2.39
+- **Working Directory**: /home/zach/Code/rtgs-lab-tools
+
+## Parameters
+- **input_records**: 28389
+- **packet_types**: all
+- **output_format**: csv
+- **save_to_parsed_dir**: True
+- **original_file_path**: data/LCCMR_Irrigation_2025-05-20_to_2025-06-10_20250610_103144.csv
+
+## Results Summary
+- **Status**: ✅ Success
+- **Duration**: 18.7s
+- **Input Records**: 28389
+- **Parsed Records**: 28389
+- **Output Measurements**: 599191
+- **Skipped Records**: 0
+- **Packet Types**: all
+- **Output File**: /home/zach/Code/rtgs-lab-tools/src/data/parsed/LCCMR_Irrigation_2025-05-20_to_2025-06-10_20250610_103144_parsed_20250613_161755.csv
+
+## Detailed Results
+<details>
+<summary>Full Results JSON</summary>
+
+```json
+{
+  "success": true,
+  "input_records": 28389,
+  "parsed_records": 28389,
+  "output_measurements": 599191,
+  "skipped_records": 0,
+  "packet_types": "all",
+  "output_file": "/home/zach/Code/rtgs-lab-tools/src/data/parsed/LCCMR_Irrigation_2025-05-20_to_2025-06-10_20250610_103144_parsed_20250613_161755.csv",
+  "start_time": "2025-06-13T16:17:50.488154",
+  "end_time": "2025-06-13T16:18:09.178117",
+  "duration": 18.689963
+}
+```
+</details>
+
+## Execution Environment
+<details>
+<summary>Environment Details</summary>
+
+```json
+{
+  "timestamp": "2025-06-13T16:18:09.178151",
+  "user": "zach",
+  "hostname": "zach-Z390-AORUS-PRO-WIFI",
+  "platform": "Linux-6.11.0-25-generic-x86_64-with-glibc2.39",
+  "python_version": "3.12.3",
+  "working_directory": "/home/zach/Code/rtgs-lab-tools",
+  "script_path": "/home/zach/Code/rtgs-lab-tools/src/rtgs_lab_tools/data_parser/core.py",
+  "tool_name": "data-parser",
+  "environment_variables": {
+    "CI": "false",
+    "GITHUB_ACTIONS": "false",
+    "GITHUB_ACTOR": null,
+    "GITHUB_WORKFLOW": null,
+    "GITHUB_RUN_ID": null,
+    "MCP_SESSION": "false",
+    "MCP_USER": null
+  },
+  "execution_source": "Manual/Local",
+  "triggered_by": "zach@zach-Z390-AORUS-PRO-WIFI"
+}
+```
+</details>
+
+---
+*Log generated automatically by RTGS Lab Tools - data-parser*
